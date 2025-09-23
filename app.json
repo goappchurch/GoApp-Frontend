@@ -1,29 +1,20 @@
 {
   "expo": {
-    "name": "Reyuvel Travel App",
-    "slug": "reyuvel-travel-app",
+    "name": "GoAppChurch",
+    "slug": "goappchurch",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#2563eb",
+      "resizeMode": "contain"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.reyuvel.travelapp"
+      "bundleIdentifier": "com.reyuvel.goappchurch"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "package": "com.reyuvel.travelapp"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
+      "package": "com.reyuvel.goappchurch"
     },
     "plugins": [
       "expo-secure-store",
