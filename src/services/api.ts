@@ -23,6 +23,16 @@ export interface Event {
   venueAddress?: string;
   speakingTopic?: string;
   expectedAudience?: number;
+  eventDescription?: string;
+  contactPersonName?: string;
+  contactPersonPhone?: string;
+  contactPersonEmail?: string;
+  preparationNotes?: string;
+  eventPosterUrl?: string;
+  flightBookingRequired?: boolean;
+  flightBookingStatus?: string;
+  hotelBookingRequired?: boolean;
+  hotelBookingStatus?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -57,10 +67,21 @@ export interface CreateEventRequest {
   startDatetime: string;
   endDatetime: string;
   timezone: string;
+  status?: string;
   venueName?: string;
   venueAddress?: string;
   speakingTopic?: string;
   expectedAudience?: number;
+  eventDescription?: string;
+  contactPersonName?: string;
+  contactPersonPhone?: string;
+  contactPersonEmail?: string;
+  preparationNotes?: string;
+  eventPosterUrl?: string;
+  flightBookingRequired?: boolean;
+  flightBookingStatus?: string;
+  hotelBookingRequired?: boolean;
+  hotelBookingStatus?: string;
 }
 
 class ApiService {

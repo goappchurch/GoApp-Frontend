@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,13 @@ import {
   TouchableOpacity,
   SafeAreaView,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { EventsStackParamList } from '../../navigation/AppNavigator';
+import { apiService, Event } from '../../services/api';
 
 type EventsScreenNavigationProp = NativeStackNavigationProp<EventsStackParamList, 'EventsList'>;
 
@@ -18,49 +21,47 @@ interface Props {
   navigation: EventsScreenNavigationProp;
 }
 
-interface Event {
-  id: string;
-  title: string;
-  eventType: string;
-  startDate: string;
-  venue: string;
-  status: 'draft' | 'confirmed' | 'cancelled' | 'completed';
-}
-
-const mockEvents: Event[] = [
-  {
-    id: '1',
-    title: 'Sunday Morning Service',
-    eventType: 'church_service',
-    startDate: '2025-01-15T09:00:00Z',
-    venue: 'Local Church, Chennai',
-    status: 'confirmed',
-  },
-  {
-    id: '2',
-    title: 'Youth Conference',
-    eventType: 'conference',
-    startDate: '2025-01-22T18:00:00Z',
-    venue: 'City Hall, Bangalore',
-    status: 'draft',
-  },
-  {
-    id: '3',
-    title: 'Bible Study Session',
-    eventType: 'bible_study',
-    startDate: '2025-01-29T19:00:00Z',
-    venue: 'Community Center, Hyderabad',
-    status: 'confirmed',
-  },
-];
 
 export default function EventsScreen({ navigation }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredEvents = mockEvents.filter(event => {
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchEvents();
+    }, [])
+  );
+
+  const fetchEvents = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await apiService.getEvents({ limit: 100 });
+      console.log('EventsScreen - Fetched events:', response.events?.length || 0);
+      setEvents(response.events || []);
+    } catch (err: any) {
+      console.error('EventsScreen - Failed to fetch events:', err);
+      setError(err.message || 'Failed to fetch events');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredEvents = events.filter(event => {
+    const venueName = event.venueName || '';
+    const venueAddress = event.venueAddress || '';
+    const fullVenue = `${venueName}${venueAddress ? ', ' + venueAddress : ''}`;
+
     const matchesSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         event.venue.toLowerCase().includes(searchQuery.toLowerCase());
+                         fullVenue.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (event.speakingTopic && event.speakingTopic.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesFilter = filterStatus === 'all' || event.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -90,8 +91,11 @@ export default function EventsScreen({ navigation }: Props) {
   };
 
   const renderEventItem = ({ item }: { item: Event }) => {
-    const dateInfo = formatDate(item.startDate);
+    const dateInfo = formatDate(item.startDatetime);
     const statusStyle = getStatusColor(item.status);
+    const venueName = item.venueName || 'Venue TBD';
+    const venueAddress = item.venueAddress || '';
+    const fullVenue = `${venueName}${venueAddress ? ', ' + venueAddress : ''}`;
 
     return (
       <TouchableOpacity
@@ -105,8 +109,11 @@ export default function EventsScreen({ navigation }: Props) {
 
         <View style={styles.eventDetails}>
           <Text style={styles.eventTitle}>{item.title}</Text>
-          <Text style={styles.eventVenue}>{item.venue}</Text>
+          <Text style={styles.eventVenue}>{fullVenue}</Text>
           <Text style={styles.eventTime}>{dateInfo.time}</Text>
+          {item.speakingTopic && (
+            <Text style={styles.eventTopic}>Topic: {item.speakingTopic}</Text>
+          )}
         </View>
 
         <View style={styles.eventActions}>
@@ -169,22 +176,42 @@ export default function EventsScreen({ navigation }: Props) {
       </View>
 
       {/* Events List */}
-      <FlatList
-        data={filteredEvents}
-        renderItem={renderEventItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyStateText}>No events found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              Create your first event to get started
-            </Text>
-          </View>
-        }
-      />
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Loading events...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
+          <Text style={styles.errorText}>Failed to load events</Text>
+          <Text style={styles.errorSubtext}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchEvents}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredEvents}
+          renderItem={renderEventItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={64} color="#d1d5db" />
+              <Text style={styles.emptyStateText}>
+                {searchQuery || filterStatus !== 'all' ? 'No events found' : 'No events created yet'}
+              </Text>
+              <Text style={styles.emptyStateSubtext}>
+                {searchQuery || filterStatus !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'Create your first event to get started'}
+              </Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -345,5 +372,54 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#d1d5db',
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 64,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#64748b',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 64,
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#ef4444',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  eventTopic: {
+    fontSize: 12,
+    color: '#059669',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
 });

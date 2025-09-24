@@ -26,6 +26,7 @@
   "description": "Travel and Speaking Management App for Reyuvel",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
+    "@react-native-community/datetimepicker": "^8.4.5",
     "@react-native-picker/picker": "2.11.1",
     "@react-navigation/bottom-tabs": "^7.4.7",
     "@react-navigation/native": "^7.1.17",
@@ -34,6 +35,8 @@
     "@types/react-native": "^0.72.8",
     "expo": "~54.0.10",
     "expo-av": "~16.0.7",
+    "expo-document-picker": "^14.0.7",
+    "expo-image-picker": "^17.0.8",
     "expo-secure-store": "~15.0.7",
     "expo-status-bar": "^3.0.8",
     "react": "19.1.0",
