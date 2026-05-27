@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#2563eb",
+      "backgroundColor": "#1A56DB",
       "resizeMode": "contain"
     },
     "ios": {
@@ -14,11 +14,46 @@
       "bundleIdentifier": "com.reyuvel.goappchurch"
     },
     "android": {
-      "package": "com.reyuvel.goappchurch"
+      "package": "com.reyuvel.goappchurch",
+      "adaptiveIcon": {
+        "backgroundColor": "#1A56DB"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "meta": {
+        "themeColor": "#1A56DB",
+        "viewport": "width=device-width, initial-scale=1, maximum-scale=1"
+      },
+      "manifest": {
+        "name": "GoAppChurch",
+        "short_name": "GoAppChurch",
+        "theme_color": "#1A56DB",
+        "background_color": "#FFFFFF",
+        "display": "standalone",
+        "orientation": "portrait"
+      }
     },
     "plugins": [
       "expo-secure-store",
-      "expo-av"
-    ]
+      "expo-av",
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c78beff2-2a63-4654-9c95-8bafb00e58c4"
+      }
+    },
+    "owner": "goappchurch"
   }
 }

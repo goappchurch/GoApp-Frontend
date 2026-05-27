@@ -1,109 +1,80 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
-import { apiService, User, AuthResponse } from '../services/api';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
+import { User } from '../types';
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName: string, role: 'speaker' | 'assistant') => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isAuthenticated = !!user;
-
   useEffect(() => {
-    checkAuthStatus();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchUserProfile(session.user.id);
+      else setIsLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchUserProfile(session.user.id);
+      else {
+        setUser(null);
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const checkAuthStatus = async () => {
+  const fetchUserProfile = async (userId: string) => {
     try {
-      const token = await SecureStore.getItemAsync('accessToken');
-      if (token) {
-        apiService.setAuthToken(token);
-        const response = await apiService.getProfile();
-        setUser(response.user);
-      }
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      setUser(data as User);
     } catch (error) {
-      console.log('Auth check failed:', error);
-      await clearAuthData();
+      console.error('Failed to fetch user profile:', error);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
   };
 
   const login = async (email: string, password: string) => {
-    try {
-      setIsLoading(true);
-      const response: AuthResponse = await apiService.login({ email, password });
-
-      if (response.session?.accessToken) {
-        await SecureStore.setItemAsync('accessToken', response.session.accessToken);
-        await SecureStore.setItemAsync('refreshToken', response.session.refreshToken);
-        await SecureStore.setItemAsync('expiresAt', response.session.expiresAt.toString());
-      }
-
-      setUser(response.user);
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const register = async (email: string, password: string, fullName: string, role: 'speaker' | 'assistant') => {
-    try {
-      setIsLoading(true);
-      await apiService.register({ email, password, fullName, role });
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
   };
 
   const logout = async () => {
-    try {
-      await apiService.logout();
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      await clearAuthData();
-      setUser(null);
-    }
-  };
-
-  const clearAuthData = async () => {
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
-    await SecureStore.deleteItemAsync('expiresAt');
-    apiService.clearAuthToken();
-  };
-
-  const value: AuthContextType = {
-    user,
-    isAuthenticated,
-    isLoading,
-    login,
-    register,
-    logout,
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{
+      user,
+      session,
+      isAuthenticated: !!session,
+      isLoading,
+      login,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -111,8 +82,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }

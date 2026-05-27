@@ -9,37 +9,30 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { AuthStackParamList } from '../../navigation/AppNavigator';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
-import { handleApiError } from '../../services/api';
+import { colors, radius, shadow } from '../../constants/theme';
 
-type LoginScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
-
-interface Props {
-  navigation: LoginScreenNavigationProp;
-}
-
-export default function LoginScreen({ navigation }: Props) {
+export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!email.trim() || !password) {
+      Alert.alert('Missing fields', 'Please enter your email and password');
       return;
     }
-
     setLoading(true);
     try {
-      await login(email, password);
-      // Navigation will happen automatically via AuthContext state change
-    } catch (error) {
-      const errorMessage = handleApiError(error);
-      Alert.alert('Login Failed', errorMessage);
+      await login(email.trim().toLowerCase(), password);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      Alert.alert('Login Failed', message);
     } finally {
       setLoading(false);
     }
@@ -50,150 +43,151 @@ export default function LoginScreen({ navigation }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>GoAppChurch</Text>
-          <Text style={styles.subtitle}>Travel & Speaking Management</Text>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero section */}
+        <View style={styles.hero}>
+          <View style={styles.logoWrap}>
+            <View style={styles.logoOuter}>
+              <View style={styles.logoInner}>
+                <Text style={styles.logoChar}>G</Text>
+              </View>
+            </View>
+          </View>
+          <Text style={styles.appName}>GoAppChurch</Text>
+          <Text style={styles.tagline}>Speaking & Travel Management</Text>
         </View>
 
-        <View style={styles.form}>
-          <Text style={styles.formTitle}>Welcome Back</Text>
+        {/* Card */}
+        <View style={[styles.card, shadow.md]}>
+          <Text style={styles.cardTitle}>Welcome back</Text>
+          <Text style={styles.cardSubtitle}>Sign in to your account</Text>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+          {/* Email */}
+          <View style={styles.fieldWrap}>
+            <Text style={styles.fieldLabel}>Email address</Text>
+            <View style={styles.inputRow}>
+              <Ionicons name="mail-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="your@email.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholderTextColor={colors.inactive}
+              />
+            </View>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              secureTextEntry
-            />
+          {/* Password */}
+          <View style={styles.fieldWrap}>
+            <Text style={styles.fieldLabel}>Password</Text>
+            <View style={styles.inputRow}>
+              <Ionicons name="lock-closed-outline" size={18} color={colors.textTertiary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                secureTextEntry={!showPassword}
+                placeholderTextColor={colors.inactive}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* Button */}
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
+            activeOpacity={0.85}
           >
-            <Text style={styles.buttonText}>
-              {loading ? 'Signing In...' : 'Sign In'}
-            </Text>
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Text style={styles.buttonText}>Sign In</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </>
+            )}
           </TouchableOpacity>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.linkText}>Sign Up</Text>
-            </TouchableOpacity>
-          </View>
         </View>
+
+        <Text style={styles.footer}>GoAppChurch · Private Access Only</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  scrollContent: {
-    flexGrow: 1,
+  container: { flex: 1, backgroundColor: colors.primary },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingVertical: 40 },
+  hero: { alignItems: 'center', marginBottom: 32 },
+  logoWrap: { marginBottom: 16 },
+  logoOuter: {
+    width: 88,
+    height: 88,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
-    padding: 20,
-  },
-  header: {
     alignItems: 'center',
-    marginBottom: 40,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-  },
-  form: {
+  logoInner: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
     backgroundColor: '#fff',
-    padding: 24,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#f9fafb',
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    backgroundColor: '#9ca3af',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    alignItems: 'center',
   },
-  footerText: {
-    color: '#6b7280',
-    fontSize: 14,
+  logoChar: { fontSize: 36, fontWeight: '800', color: colors.primary },
+  appName: { fontSize: 30, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+  tagline: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: radius.xl,
+    padding: 28,
   },
-  linkText: {
-    color: '#2563eb',
-    fontSize: 14,
-    fontWeight: '600',
+  cardTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, marginBottom: 4 },
+  cardSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 24 },
+
+  fieldWrap: { marginBottom: 16 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginBottom: 8 },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background,
+    paddingHorizontal: 12,
   },
+  inputIcon: { marginRight: 8 },
+  input: { flex: 1, paddingVertical: 13, fontSize: 15, color: colors.textPrimary },
+  eyeBtn: { padding: 4 },
+
+  button: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    ...shadow.lg,
+  },
+  buttonDisabled: { opacity: 0.7 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  footer: { textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 24 },
 });

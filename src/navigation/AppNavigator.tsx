@@ -1,143 +1,147 @@
 import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { colors } from '../constants/theme';
 
-// Screens
+function initials(name: string) {
+  return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+}
+
 import LoginScreen from '../screens/auth/LoginScreen';
-import RegisterScreen from '../screens/auth/RegisterScreen';
-import DashboardScreen from '../screens/dashboard/DashboardScreen';
-import EventsScreen from '../screens/events/EventsScreen';
+import HomeScreen from '../screens/home/HomeScreen';
+import CalendarScreen from '../screens/calendar/CalendarScreen';
+import FlightsScreen from '../screens/flights/FlightsScreen';
+import SettingsScreen from '../screens/settings/SettingsScreen';
 import EventDetailScreen from '../screens/events/EventDetailScreen';
-import CreateEventScreen from '../screens/events/CreateEventScreen';
-import ProfileScreen from '../screens/profile/ProfileScreen';
+import AddEditEventScreen from '../screens/events/AddEditEventScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
+import ContactDetailScreen from '../screens/contacts/ContactDetailScreen';
 
-// Types
 export type AuthStackParamList = {
   Login: undefined;
-  Register: undefined;
 };
 
 export type MainTabParamList = {
-  Dashboard: undefined;
-  Events: undefined;
-  Profile: undefined;
-};
-
-export type EventsStackParamList = {
-  EventsList: undefined;
-  EventDetail: { eventId: string };
-  CreateEvent: undefined;
+  Home: undefined;
+  Calendar: undefined;
+  Flights: undefined;
+  Settings: undefined;
 };
 
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
+  EventDetail: { eventId: string };
+  AddEditEvent: { eventId?: string } | undefined;
+  Notifications: undefined;
+  ContactDetail: { contactId?: string };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const MainTab = createBottomTabNavigator<MainTabParamList>();
-const EventsStack = createNativeStackNavigator<EventsStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 function AuthNavigator() {
   return (
-    <AuthStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: '#fff' }
-      }}
-    >
+    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
-      <AuthStack.Screen name="Register" component={RegisterScreen} />
     </AuthStack.Navigator>
   );
 }
 
-function EventsNavigator() {
-  return (
-    <EventsStack.Navigator>
-      <EventsStack.Screen
-        name="EventsList"
-        component={EventsScreen}
-        options={{ title: 'Events' }}
-      />
-      <EventsStack.Screen
-        name="EventDetail"
-        component={EventDetailScreen}
-        options={{ title: 'Event Details' }}
-      />
-      <EventsStack.Screen
-        name="CreateEvent"
-        component={CreateEventScreen}
-        options={{ title: 'Create Event' }}
-      />
-    </EventsStack.Navigator>
-  );
-}
-
 function MainNavigator() {
+  const { user } = useAuth();
+  const isAssistant = user?.role === 'assistant';
+
   return (
     <MainTab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap;
-
-          if (route.name === 'Dashboard') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Events') {
-            iconName = focused ? 'calendar' : 'calendar-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
-          } else {
-            iconName = 'help';
+          if (route.name === 'Settings') {
+            return (
+              <View style={{
+                width: 28, height: 28, borderRadius: 14,
+                backgroundColor: focused ? colors.primary : colors.primaryLight,
+                justifyContent: 'center', alignItems: 'center',
+              }}>
+                <Text style={{
+                  color: focused ? '#fff' : colors.primary,
+                  fontSize: 11, fontWeight: '800',
+                }}>
+                  {initials(user?.full_name ?? '?')}
+                </Text>
+              </View>
+            );
           }
-
-          return <Ionicons name={iconName} size={size} color={color} />;
+          const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
+            Home: focused ? 'home' : 'home-outline',
+            Calendar: focused ? 'calendar' : 'calendar-outline',
+            Flights: focused ? 'airplane' : 'airplane-outline',
+          };
+          return <Ionicons name={icons[route.name] ?? 'help'} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: 'gray',
-        headerStyle: {
-          backgroundColor: '#2563eb',
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textTertiary,
+        headerShown: false,
+        tabBarStyle: {
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 6,
+          backgroundColor: '#fff',
         },
-        headerTintColor: '#fff',
-        headerTitleStyle: {
-          fontWeight: 'bold',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
         },
       })}
     >
-      <MainTab.Screen
-        name="Dashboard"
-        component={DashboardScreen}
-        options={{ title: 'GoAppChurch' }}
-      />
-      <MainTab.Screen
-        name="Events"
-        component={EventsNavigator}
-        options={{ headerShown: false }}
-      />
-      <MainTab.Screen
-        name="Profile"
-        component={ProfileScreen}
-      />
+      <MainTab.Screen name="Home" component={HomeScreen} />
+      <MainTab.Screen name="Calendar" component={CalendarScreen} />
+      <MainTab.Screen name="Flights" component={FlightsScreen} />
+      <MainTab.Screen name="Settings" component={SettingsScreen} />
     </MainTab.Navigator>
   );
 }
 
 export default function AppNavigator() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const isAssistant = user?.role === 'assistant';
 
-  if (isLoading) {
-    return null; // Or a loading screen component
-  }
+  if (isLoading) return null;
 
   return (
     <NavigationContainer>
       <RootStack.Navigator screenOptions={{ headerShown: false }}>
         {isAuthenticated ? (
-          <RootStack.Screen name="Main" component={MainNavigator} />
+          <>
+            <RootStack.Screen name="Main" component={MainNavigator} />
+            <RootStack.Screen
+              name="EventDetail"
+              component={EventDetailScreen}
+              options={{ headerShown: true, title: 'Event', headerBackTitle: 'Back' }}
+            />
+            <RootStack.Screen
+              name="AddEditEvent"
+              component={AddEditEventScreen}
+              options={{ headerShown: true, title: 'Event', headerBackTitle: 'Back', presentation: 'modal' }}
+            />
+            <RootStack.Screen
+              name="Notifications"
+              component={NotificationsScreen}
+              options={{ headerShown: true, title: 'Notifications', headerBackTitle: 'Back' }}
+            />
+            <RootStack.Screen
+              name="ContactDetail"
+              component={ContactDetailScreen}
+              options={{ headerShown: true, title: 'Contact', headerBackTitle: 'Back', presentation: 'modal' }}
+            />
+          </>
         ) : (
           <RootStack.Screen name="Auth" component={AuthNavigator} />
         )}
@@ -145,3 +149,22 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  fab: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+});
