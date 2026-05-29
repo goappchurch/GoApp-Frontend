@@ -1,7 +1,5 @@
 export type UserRole = 'boss' | 'assistant';
 
-export type EventStatus = 'tentative' | 'confirmed' | 'rejected' | 'cancelled' | 'completed';
-
 export type EventType =
   | 'sunday_service'
   | 'youth_conference'
@@ -51,7 +49,6 @@ export interface Event {
   speaking_topic?: string;
   expected_audience?: number;
   companions?: string[];
-  status: EventStatus;
   poster_url?: string;
   created_by: string;
   created_at: string;

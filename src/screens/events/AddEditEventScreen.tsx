@@ -10,13 +10,13 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import DateField from '../../components/DateField';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -36,11 +36,25 @@ import { colors, shadow, radius } from '../../constants/theme';
 type RouteProps = RouteProp<RootStackParamList, 'AddEditEvent'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const REGIONS = ['Kerala', 'South India', 'North India', 'Middle East', 'Europe', 'Others'];
-const TIMEZONES = [
-  'Asia/Kolkata', 'UTC', 'America/New_York', 'America/Chicago',
-  'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Dubai',
-  'Asia/Singapore', 'Australia/Sydney',
+const REGION_OPTIONS = [
+  { value: 'Kerala',       label: 'Kerala',       sub: "God's Own Country",                          icon: 'business-outline'  as const, color: '#7C3AED' },
+  { value: 'South India',  label: 'South India',  sub: 'Tamil Nadu, Karnataka, Andhra Pradesh & more', icon: 'leaf-outline'      as const, color: '#16A34A' },
+  { value: 'North India',  label: 'North India',  sub: 'Delhi, Rajasthan, Uttar Pradesh & more',      icon: 'compass-outline'   as const, color: '#2563EB' },
+  { value: 'Middle East',  label: 'Middle East',  sub: 'Gulf Countries & beyond',                     icon: 'sunny-outline'     as const, color: '#D97706' },
+  { value: 'Europe',       label: 'Europe',       sub: 'Western, Central & Eastern Europe',           icon: 'flag-outline'      as const, color: '#0891B2' },
+  { value: 'Others',       label: 'Others',       sub: 'Other countries & regions',                   icon: 'earth-outline'     as const, color: '#64748B' },
+];
+const TIMEZONE_OPTIONS = [
+  { value: 'Asia/Kolkata',         label: 'India (IST)',          sub: 'UTC+5:30 · Asia/Kolkata',         icon: 'flag-outline'          as const, color: '#FF6B35' },
+  { value: 'UTC',                  label: 'UTC',                  sub: 'Universal Coordinated Time',      icon: 'globe-outline'          as const, color: '#64748B' },
+  { value: 'America/New_York',     label: 'New York (ET)',         sub: 'UTC−5/−4 · Eastern Time',         icon: 'business-outline'       as const, color: '#1D4ED8' },
+  { value: 'America/Chicago',      label: 'Chicago (CT)',          sub: 'UTC−6/−5 · Central Time',         icon: 'partly-sunny-outline'   as const, color: '#0891B2' },
+  { value: 'America/Los_Angeles',  label: 'Los Angeles (PT)',      sub: 'UTC−8/−7 · Pacific Time',         icon: 'sunny-outline'          as const, color: '#D97706' },
+  { value: 'Europe/London',        label: 'London (GMT/BST)',      sub: 'UTC+0/+1 · Western Europe',       icon: 'umbrella-outline'       as const, color: '#6D28D9' },
+  { value: 'Europe/Paris',         label: 'Paris (CET/CEST)',      sub: 'UTC+1/+2 · Central Europe',       icon: 'cafe-outline'           as const, color: '#DB2777' },
+  { value: 'Asia/Dubai',           label: 'Dubai (GST)',           sub: 'UTC+4 · Gulf Standard Time',      icon: 'sunny-outline'          as const, color: '#B45309' },
+  { value: 'Asia/Singapore',       label: 'Singapore (SGT)',       sub: 'UTC+8 · Asia/Singapore',          icon: 'airplane-outline'       as const, color: '#0E7490' },
+  { value: 'Australia/Sydney',     label: 'Sydney (AEST/AEDT)',    sub: 'UTC+10/+11 · Eastern Australia',  icon: 'water-outline'          as const, color: '#047857' },
 ];
 const MAX_COMPANIONS = 15;
 
@@ -108,7 +122,7 @@ export default function AddEditEventScreen() {
   }, [navigation, isEdit]);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [existingEvents, setExistingEvents] = useState<{ date_start: string; status: string }[]>([]);
+  const [existingEvents, setExistingEvents] = useState<{ date_start: string }[]>([]);
   const [posterUri, setPosterUri] = useState<string | null>(null);
   const [uploadingPoster, setUploadingPoster] = useState(false);
   const [ticketUri, setTicketUri] = useState<string | null>(null);
@@ -117,6 +131,8 @@ export default function AddEditEventScreen() {
   const [uploadingReturnPdf, setUploadingReturnPdf] = useState(false);
 
   const [activeSection, setActiveSection] = useState(0);
+  const [regionModal, setRegionModal] = useState(false);
+  const [timezoneModal, setTimezoneModal] = useState(false);
   const sectionYs = useRef<number[]>(new Array(SECTIONS.length).fill(0));
   const tabScrollRef = useRef<ScrollView>(null);
   const formScrollRef = useRef<ScrollView>(null);
@@ -139,7 +155,7 @@ export default function AddEditEventScreen() {
 
   const loadExistingEvents = async () => {
     try {
-      const { data } = await supabase.from('events').select('date_start, status').eq('status', 'confirmed');
+      const { data } = await supabase.from('events').select('date_start');
       setExistingEvents(data ?? []);
     } catch (_) {}
   };
@@ -422,6 +438,8 @@ export default function AddEditEventScreen() {
           ref={formScrollRef}
           style={styles.formScroll}
           contentContainerStyle={styles.content}
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
@@ -436,7 +454,7 @@ export default function AddEditEventScreen() {
                 value={form.title}
                 onChangeText={(v) => set('title', v)}
                 placeholder="e.g. Sunday Morning Service"
-                placeholderTextColor={colors.inactive}
+                placeholderTextColor="#9CA3AF"
               />
             </Field>
             <TwoFields
@@ -458,31 +476,78 @@ export default function AddEditEventScreen() {
         <View onLayout={(e) => { sectionYs.current[1] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="location-outline" bgGradient={SECTIONS[1].bgGradient} iconGradient={SECTIONS[1].iconGradient} title="Venue" subtitle={SECTIONS[1].subtitle} emoji={SECTIONS[1].emoji}>
             <Field icon="business-outline" iconColor={colors.success} label="Venue Name">
-              <TextInput style={fld.input} value={form.venue_name ?? ''} onChangeText={(v) => set('venue_name', v)} placeholder="Church or hall name" placeholderTextColor={colors.inactive} />
+              <TextInput style={fld.input} value={form.venue_name ?? ''} onChangeText={(v) => set('venue_name', v)} placeholder="Church or hall name" placeholderTextColor="#9CA3AF" />
             </Field>
             <Field icon="home-outline" iconColor={colors.success} label="Street Address">
-              <TextInput style={fld.input} value={form.venue_address ?? ''} onChangeText={(v) => set('venue_address', v)} placeholder="Street address" placeholderTextColor={colors.inactive} />
+              <TextInput style={fld.input} value={form.venue_address ?? ''} onChangeText={(v) => set('venue_address', v)} placeholder="Street address" placeholderTextColor="#9CA3AF" />
             </Field>
             <TwoFields
               left={
                 <Field icon="business-outline" iconColor={colors.success} label="City">
-                  <TextInput style={fld.input} value={form.venue_city ?? ''} onChangeText={(v) => set('venue_city', v)} placeholder="City" placeholderTextColor={colors.inactive} />
+                  <TextInput style={fld.input} value={form.venue_city ?? ''} onChangeText={(v) => set('venue_city', v)} placeholder="City" placeholderTextColor="#9CA3AF" />
                 </Field>
               }
               right={
                 <Field icon="flag-outline" iconColor={colors.success} label="Country">
-                  <TextInput style={fld.input} value={form.venue_country ?? ''} onChangeText={(v) => set('venue_country', v)} placeholder="Country" placeholderTextColor={colors.inactive} />
+                  <TextInput style={fld.input} value={form.venue_country ?? ''} onChangeText={(v) => set('venue_country', v)} placeholder="Country" placeholderTextColor="#9CA3AF" />
                 </Field>
               }
             />
             <Field icon="earth-outline" iconColor={colors.success} label="Region">
-              <View style={fld.pickerWrap}>
-                <Picker selectedValue={form.venue_region ?? ''} onValueChange={(v) => set('venue_region', v || undefined)} style={fld.picker} itemStyle={fld.pickerItem}>
-                  <Picker.Item label="Select region…" value="" />
-                  {REGIONS.map((r) => <Picker.Item key={r} label={r} value={r} />)}
-                </Picker>
-              </View>
+              <TouchableOpacity
+                onPress={() => setRegionModal(true)}
+                activeOpacity={0.75}
+                style={fld.regionTrigger}
+              >
+                <Text style={[fld.regionTriggerText, !form.venue_region && { color: '#9CA3AF' }]} numberOfLines={1}>
+                  {form.venue_region ?? 'Select region'}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#94A3B8" />
+              </TouchableOpacity>
             </Field>
+
+            {/* Region picker modal */}
+            <Modal transparent animationType="slide" visible={regionModal} onRequestClose={() => setRegionModal(false)} statusBarTranslucent>
+              <View style={fld.regionBackdrop}>
+                <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setRegionModal(false)} />
+                <View style={fld.regionSheet}>
+                  <View style={fld.regionHandle} />
+                  <View style={fld.regionHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={fld.regionTitle}>Select Region</Text>
+                      <Text style={fld.regionSubtitle}>Choose the region where your event will take place.</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setRegionModal(false)} style={fld.regionCloseBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="close" size={18} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                  {REGION_OPTIONS.map((opt) => {
+                    const isSelected = form.venue_region === opt.value;
+                    return (
+                      <TouchableOpacity
+                        key={opt.value}
+                        style={[fld.regionRow, isSelected && fld.regionRowSelected]}
+                        onPress={() => { set('venue_region', opt.value); setRegionModal(false); }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[fld.regionIconWrap, { backgroundColor: opt.color + '20' }]}>
+                          <Ionicons name={opt.icon} size={20} color={opt.color} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={fld.regionRowLabel}>{opt.label}</Text>
+                          <Text style={fld.regionRowSub}>{opt.sub}</Text>
+                        </View>
+                        {isSelected
+                          ? <Ionicons name="checkmark-circle" size={22} color="#7C3AED" />
+                          : <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                        }
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <View style={{ height: 24 }} />
+                </View>
+              </View>
+            </Modal>
           </SectionCard>
         </View>
 
@@ -505,17 +570,17 @@ export default function AddEditEventScreen() {
               </View>
             )}
             <Field icon="person-outline" iconColor={colors.warning} label="Full Name">
-              <TextInput style={fld.input} value={form.organizer_name ?? ''} onChangeText={(v) => set('organizer_name', v)} placeholder="Organizer name" placeholderTextColor={colors.inactive} />
+              <TextInput style={fld.input} value={form.organizer_name ?? ''} onChangeText={(v) => set('organizer_name', v)} placeholder="Organizer name" placeholderTextColor="#9CA3AF" />
             </Field>
             <TwoFields
               left={
                 <Field icon="call-outline" iconColor={colors.warning} label="Phone">
-                  <TextInput style={fld.input} value={form.organizer_phone ?? ''} onChangeText={(v) => set('organizer_phone', v)} keyboardType="phone-pad" placeholder="+91 XXXXX" placeholderTextColor={colors.inactive} />
+                  <TextInput style={fld.input} value={form.organizer_phone ?? ''} onChangeText={(v) => set('organizer_phone', v)} keyboardType="phone-pad" placeholder="+91 XXXXX" placeholderTextColor="#9CA3AF" />
                 </Field>
               }
               right={
                 <Field icon="mail-outline" iconColor={colors.warning} label="Email">
-                  <TextInput style={fld.input} value={form.organizer_email ?? ''} onChangeText={(v) => set('organizer_email', v)} keyboardType="email-address" autoCapitalize="none" placeholder="email@..." placeholderTextColor={colors.inactive} />
+                  <TextInput style={fld.input} value={form.organizer_email ?? ''} onChangeText={(v) => set('organizer_email', v)} keyboardType="email-address" autoCapitalize="none" placeholder="email@..." placeholderTextColor="#9CA3AF" />
                 </Field>
               }
             />
@@ -538,24 +603,24 @@ export default function AddEditEventScreen() {
                 <TwoFields
                   left={
                     <Field icon="location-outline" iconColor="#7C3AED" label="Boarding Point">
-                      <TextInput style={fld.input} value={form.boarding_point ?? ''} onChangeText={(v) => set('boarding_point', v)} placeholder="e.g. Kochi" placeholderTextColor={colors.inactive} />
+                      <TextInput style={fld.input} value={form.boarding_point ?? ''} onChangeText={(v) => set('boarding_point', v)} placeholder="e.g. Kochi" placeholderTextColor="#9CA3AF" />
                     </Field>
                   }
                   right={
                     <Field icon="location-outline" iconColor="#7C3AED" label="Deboarding Point">
-                      <TextInput style={fld.input} value={form.deboarding_point ?? ''} onChangeText={(v) => set('deboarding_point', v)} placeholder="e.g. Dubai" placeholderTextColor={colors.inactive} />
+                      <TextInput style={fld.input} value={form.deboarding_point ?? ''} onChangeText={(v) => set('deboarding_point', v)} placeholder="e.g. Dubai" placeholderTextColor="#9CA3AF" />
                     </Field>
                   }
                 />
                 <TwoFields
                   left={
                     <Field icon="barcode-outline" iconColor="#7C3AED" label="Flight No.">
-                      <TextInput style={fld.input} value={form.flight_number ?? ''} onChangeText={(v) => set('flight_number', v)} placeholder="EK 123" placeholderTextColor={colors.inactive} autoCapitalize="characters" />
+                      <TextInput style={fld.input} value={form.flight_number ?? ''} onChangeText={(v) => set('flight_number', v)} placeholder="EK 123" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
                     </Field>
                   }
                   right={
                     <Field icon="airplane-outline" iconColor="#7C3AED" label="Airline">
-                      <TextInput style={fld.input} value={form.airline ?? ''} onChangeText={(v) => set('airline', v)} placeholder="Emirates" placeholderTextColor={colors.inactive} />
+                      <TextInput style={fld.input} value={form.airline ?? ''} onChangeText={(v) => set('airline', v)} placeholder="Emirates" placeholderTextColor="#9CA3AF" />
                     </Field>
                   }
                 />
@@ -601,24 +666,24 @@ export default function AddEditEventScreen() {
                 <TwoFields
                   left={
                     <Field icon="location-outline" iconColor={colors.success} label="Boarding Point">
-                      <TextInput style={fld.input} value={form.return_boarding_point ?? ''} onChangeText={(v) => set('return_boarding_point', v)} placeholder="e.g. Dubai" placeholderTextColor={colors.inactive} />
+                      <TextInput style={fld.input} value={form.return_boarding_point ?? ''} onChangeText={(v) => set('return_boarding_point', v)} placeholder="e.g. Dubai" placeholderTextColor="#9CA3AF" />
                     </Field>
                   }
                   right={
                     <Field icon="location-outline" iconColor={colors.success} label="Deboarding Point">
-                      <TextInput style={fld.input} value={form.return_deboarding_point ?? ''} onChangeText={(v) => set('return_deboarding_point', v)} placeholder="e.g. Kochi" placeholderTextColor={colors.inactive} />
+                      <TextInput style={fld.input} value={form.return_deboarding_point ?? ''} onChangeText={(v) => set('return_deboarding_point', v)} placeholder="e.g. Kochi" placeholderTextColor="#9CA3AF" />
                     </Field>
                   }
                 />
                 <TwoFields
                   left={
                     <Field icon="barcode-outline" iconColor={colors.success} label="Flight No.">
-                      <TextInput style={fld.input} value={form.return_flight_number ?? ''} onChangeText={(v) => set('return_flight_number', v)} placeholder="EK 124" placeholderTextColor={colors.inactive} autoCapitalize="characters" />
+                      <TextInput style={fld.input} value={form.return_flight_number ?? ''} onChangeText={(v) => set('return_flight_number', v)} placeholder="EK 124" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
                     </Field>
                   }
                   right={
                     <Field icon="airplane-outline" iconColor={colors.success} label="Airline">
-                      <TextInput style={fld.input} value={form.return_airline ?? ''} onChangeText={(v) => set('return_airline', v)} placeholder="Emirates" placeholderTextColor={colors.inactive} />
+                      <TextInput style={fld.input} value={form.return_airline ?? ''} onChangeText={(v) => set('return_airline', v)} placeholder="Emirates" placeholderTextColor="#9CA3AF" />
                     </Field>
                   }
                 />
@@ -655,10 +720,10 @@ export default function AddEditEventScreen() {
         <View onLayout={(e) => { sectionYs.current[4] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="bed-outline" bgGradient={SECTIONS[4].bgGradient} iconGradient={SECTIONS[4].iconGradient} title="Accommodation" subtitle={SECTIONS[4].subtitle} emoji={SECTIONS[4].emoji}>
             <Field icon="business-outline" iconColor="#E11D48" label="Hotel Name">
-              <TextInput style={fld.input} value={form.hotel_name ?? ''} onChangeText={(v) => set('hotel_name', v)} placeholder="Hotel name" placeholderTextColor={colors.inactive} />
+              <TextInput style={fld.input} value={form.hotel_name ?? ''} onChangeText={(v) => set('hotel_name', v)} placeholder="Hotel name" placeholderTextColor="#9CA3AF" />
             </Field>
             <Field icon="navigate-outline" iconColor="#E11D48" label="Hotel Address">
-              <TextInput style={fld.input} value={form.hotel_address ?? ''} onChangeText={(v) => set('hotel_address', v)} placeholder="Address" placeholderTextColor={colors.inactive} />
+              <TextInput style={fld.input} value={form.hotel_address ?? ''} onChangeText={(v) => set('hotel_address', v)} placeholder="Address" placeholderTextColor="#9CA3AF" />
             </Field>
             <TwoFields
               left={
@@ -695,7 +760,7 @@ export default function AddEditEventScreen() {
                       value={name}
                       onChangeText={(v) => updateCompanion(idx, v)}
                       placeholder="Full name"
-                      placeholderTextColor={colors.inactive}
+                      placeholderTextColor="#9CA3AF"
                     />
                     <TouchableOpacity onPress={() => removeCompanion(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <View style={styles.companionRemove}>
@@ -751,26 +816,76 @@ export default function AddEditEventScreen() {
         <View onLayout={(e) => { sectionYs.current[7] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="ellipsis-horizontal-circle-outline" bgGradient={SECTIONS[7].bgGradient} iconGradient={SECTIONS[7].iconGradient} title="Others" subtitle={SECTIONS[7].subtitle} emoji={SECTIONS[7].emoji}>
             <Field icon="mic-outline" iconColor={colors.textSecondary} label="Speaking Topic">
-              <TextInput style={fld.input} value={form.speaking_topic ?? ''} onChangeText={(v) => set('speaking_topic', v)} placeholder="Topic or sermon title" placeholderTextColor={colors.inactive} />
+              <TextInput style={fld.input} value={form.speaking_topic ?? ''} onChangeText={(v) => set('speaking_topic', v)} placeholder="Topic or sermon title" placeholderTextColor="#9CA3AF" />
             </Field>
             <TwoFields
               left={
                 <Field icon="people-outline" iconColor={colors.textSecondary} label="Expected Audience">
-                  <TextInput style={fld.input} value={form.expected_audience?.toString() ?? ''} onChangeText={(v) => set('expected_audience', v ? parseInt(v) : undefined)} keyboardType="numeric" placeholder="e.g. 500" placeholderTextColor={colors.inactive} />
+                  <TextInput style={fld.input} value={form.expected_audience?.toString() ?? ''} onChangeText={(v) => set('expected_audience', v ? parseInt(v) : undefined)} keyboardType="numeric" placeholder="e.g. 500" placeholderTextColor="#9CA3AF" />
                 </Field>
               }
               right={
                 <Field icon="time-outline" iconColor={colors.textSecondary} label="Timezone">
-                  <View style={fld.pickerWrap}>
-                    <Picker selectedValue={form.timezone} onValueChange={(v) => set('timezone', v)} style={fld.picker} itemStyle={fld.pickerItem}>
-                      {TIMEZONES.map((tz) => <Picker.Item key={tz} label={tz} value={tz} />)}
-                    </Picker>
-                  </View>
+                  <TouchableOpacity
+                    onPress={() => setTimezoneModal(true)}
+                    activeOpacity={0.75}
+                    style={fld.regionTrigger}
+                  >
+                    <Text style={[fld.regionTriggerText, !form.timezone && { color: '#9CA3AF' }]} numberOfLines={1}>
+                      {TIMEZONE_OPTIONS.find(t => t.value === form.timezone)?.label ?? 'Select timezone'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={14} color="#94A3B8" />
+                  </TouchableOpacity>
                 </Field>
               }
             />
           </SectionCard>
         </View>
+
+        {/* Timezone picker modal */}
+        <Modal transparent animationType="slide" visible={timezoneModal} onRequestClose={() => setTimezoneModal(false)} statusBarTranslucent>
+          <View style={fld.regionBackdrop}>
+            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setTimezoneModal(false)} />
+            <View style={[fld.regionSheet, { maxHeight: '80%' }]}>
+              <View style={fld.regionHandle} />
+              <View style={fld.regionHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={fld.regionTitle}>Select Timezone</Text>
+                  <Text style={fld.regionSubtitle}>Choose the timezone for this event.</Text>
+                </View>
+                <TouchableOpacity onPress={() => setTimezoneModal(false)} style={fld.regionCloseBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close" size={18} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+                {TIMEZONE_OPTIONS.map((opt) => {
+                  const isSelected = form.timezone === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[fld.regionRow, isSelected && fld.regionRowSelected]}
+                      onPress={() => { set('timezone', opt.value); setTimezoneModal(false); }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[fld.regionIconWrap, { backgroundColor: opt.color + '20' }]}>
+                        <Ionicons name={opt.icon} size={20} color={opt.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={fld.regionRowLabel}>{opt.label}</Text>
+                        <Text style={fld.regionRowSub}>{opt.sub}</Text>
+                      </View>
+                      {isSelected
+                        ? <Ionicons name="checkmark-circle" size={22} color="#7C3AED" />
+                        : <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                      }
+                    </TouchableOpacity>
+                  );
+                })}
+                <View style={{ height: 24 }} />
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
         {/* ── SAVE ── */}
         <TouchableOpacity
@@ -1089,4 +1204,43 @@ const fld = StyleSheet.create({
   pickerWrap: { marginRight: -12, marginVertical: -4 },
   picker: { height: 44, color: colors.textPrimary },
   pickerItem: { fontSize: 13 },
+
+  // Region picker
+  regionTrigger: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 6, minHeight: 32, flex: 1,
+  },
+  regionTriggerText: { fontSize: 13, color: colors.textPrimary, flex: 1, marginRight: 4 },
+  regionBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15,23,42,0.5)' },
+  regionSheet: {
+    backgroundColor: '#FAFBFF',
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingBottom: 8,
+  },
+  regionHandle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1',
+    alignSelf: 'center', marginTop: 12, marginBottom: 8,
+  },
+  regionHeader: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    paddingHorizontal: 22, paddingTop: 8, paddingBottom: 16, gap: 12,
+  },
+  regionTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 3 },
+  regionSubtitle: { fontSize: 13, color: '#64748B', lineHeight: 18 },
+  regionCloseBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center',
+    marginTop: 2,
+  },
+  regionRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 20, paddingVertical: 14,
+  },
+  regionRowSelected: { backgroundColor: '#F5F0FF' },
+  regionIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  regionRowLabel: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
+  regionRowSub: { fontSize: 12, color: '#94A3B8', lineHeight: 16 },
 });

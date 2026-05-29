@@ -17,7 +17,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { getEvents } from '../../services/events';
-import { Event, EventStatus } from '../../types';
+import { Event } from '../../types';
 import { colors, shadow, radius } from '../../constants/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -37,14 +37,6 @@ const GRADIENTS: [string, string][] = [
 function gradientFor(str: string): [string, string] {
   return GRADIENTS[(str.charCodeAt(0) ?? 0) % GRADIENTS.length];
 }
-
-const STATUS_META: Record<EventStatus, { label: string; bg: string; text: string }> = {
-  confirmed:  { label: 'Confirmed',  bg: '#DCFCE7', text: '#15803D' },
-  tentative:  { label: 'Tentative',  bg: '#FEF9C3', text: '#854D0E' },
-  rejected:   { label: 'Rejected',   bg: '#FEE2E2', text: '#991B1B' },
-  cancelled:  { label: 'Cancelled',  bg: '#F3F4F6', text: '#4B5563' },
-  completed:  { label: 'Completed',  bg: '#EDE9FE', text: '#5B21B6' },
-};
 
 
 function formatDay(iso: string) {
@@ -157,7 +149,6 @@ export default function FlightsScreen() {
 function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
   const dest = event.venue?.city ?? event.venue?.country ?? event.title;
   const gradient = gradientFor(dest);
-  const status = STATUS_META[event.status];
   const depTime = formatTime(event.travel?.departure_time);
   const arrTime = formatTime(event.travel?.arrival_time);
   const checkInTime = formatTime(event.accommodation?.check_in);
@@ -194,11 +185,8 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
           </View>
         </View>
 
-        {/* Status + route strip */}
+        {/* Route strip */}
         <View style={styles.bannerBottom}>
-          <View style={[styles.statusChip, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
-            <Text style={styles.statusChipText}>{status.label}</Text>
-          </View>
         </View>
       </LinearGradient>
 

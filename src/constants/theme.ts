@@ -26,30 +26,6 @@ export const gradients = {
   card: ['#FFFFFF', '#F8FAFC'] as const,
 };
 
-export const statusColors: Record<string, string> = {
-  tentative: '#D97706',
-  confirmed: '#16A34A',
-  rejected: '#DC2626',
-  cancelled: '#DC2626',
-  completed: '#64748B',
-};
-
-export const statusBgColors: Record<string, string> = {
-  tentative: '#FEF3C7',
-  confirmed: '#DCFCE7',
-  rejected: '#FEE2E2',
-  cancelled: '#FEE2E2',
-  completed: '#F1F5F9',
-};
-
-export const statusTextColors: Record<string, string> = {
-  tentative: '#92400E',
-  confirmed: '#14532D',
-  rejected: '#991B1B',
-  cancelled: '#991B1B',
-  completed: '#334155',
-};
-
 export const eventTypeLabels: Record<string, string> = {
   sunday_service: 'Sunday Service',
   youth_conference: 'Youth Conference',

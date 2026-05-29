@@ -112,28 +112,6 @@ function buildAgendaGroups(events: Event[]) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STATUS_COLORS: Record<string, string> = {
-  confirmed: '#10B981',
-  tentative: '#F59E0B',
-  rejected: '#EF4444',
-  cancelled: '#EF4444',
-  completed: '#94A3B8',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  confirmed: 'Confirmed',
-  tentative: 'Tentative',
-  rejected: 'Rejected',
-  cancelled: 'Cancelled',
-  completed: 'Done',
-};
-
-const LEGEND_ITEMS = [
-  { key: 'confirmed', color: '#10B981', label: 'Confirmed' },
-  { key: 'tentative', color: '#F59E0B', label: 'Tentative' },
-  { key: 'rejected', color: '#EF4444', label: 'Rejected' },
-  { key: 'completed', color: '#94A3B8', label: 'Done' },
-];
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const CAL_H_PAD = 14;
@@ -184,15 +162,20 @@ export default function CalendarScreen() {
     }
   }, []);
 
+  // Always keep a fresh ref so useFocusEffect never reads a stale month
+  const currentMonthRef = useRef(currentMonth);
+  useEffect(() => { currentMonthRef.current = currentMonth; }, [currentMonth]);
+
   const firstFocus = useRef(true);
   useFocusEffect(useCallback(() => {
+    const { year, month } = currentMonthRef.current;
     if (firstFocus.current) {
       firstFocus.current = false;
       if (viewMode === 'agenda') loadAgenda(true);
-      else loadMonth(currentMonth.year, currentMonth.month, true);
+      else loadMonth(year, month, true);
     } else {
       if (viewMode === 'agenda') loadAgenda();
-      else loadMonth(currentMonth.year, currentMonth.month);
+      else loadMonth(year, month);
     }
   }, [viewMode]));
 
@@ -248,20 +231,6 @@ export default function CalendarScreen() {
 
   const agendaGroups = useMemo(() => buildAgendaGroups(agendaEvents), [agendaEvents]);
 
-  const monthStats = useMemo(() => ({
-    total: events.length,
-    confirmed: events.filter(e => e.status === 'confirmed').length,
-    tentative: events.filter(e => e.status === 'tentative').length,
-    rejected: events.filter(e => e.status === 'rejected' || e.status === 'cancelled').length,
-    completed: events.filter(e => e.status === 'completed').length,
-  }), [events]);
-
-  const statusCountsMap: Record<string, number> = {
-    confirmed: monthStats.confirmed,
-    tentative: monthStats.tentative,
-    rejected: monthStats.rejected,
-    completed: monthStats.completed,
-  };
 
   const weekEventMap = useMemo(() => {
     const map: Record<string, Event[]> = {};
@@ -332,13 +301,14 @@ export default function CalendarScreen() {
   if (pageLoading) {
     return (
       <LinearGradient
-        colors={['#120D2E', '#2A166F', '#4C1D95', '#6D28D9']}
+        colors={['#2D1B8E', '#4C1D95', '#6D28D9', '#8B5CF6', '#C4B5FD']}
+        locations={[0, 0.15, 0.40, 0.68, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 }}
       >
         <ActivityIndicator size="large" color="#A78BFA" />
-        <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, fontWeight: '600' }}>
+        <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' }}>
           Loading calendar…
         </Text>
       </LinearGradient>
@@ -347,7 +317,8 @@ export default function CalendarScreen() {
 
   return (
     <LinearGradient
-      colors={['#3f22d1', '#35129d', '#40216c', '#12022d']}
+      colors={['#2D1B8E', '#4C1D95', '#6D28D9', '#8B5CF6', '#C4B5FD']}
+      locations={[0, 0.15, 0.40, 0.68, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{ flex: 1 }}
@@ -356,19 +327,28 @@ export default function CalendarScreen() {
         {/* Ambient orb decorations */}
         <View style={styles.orb1} pointerEvents="none" />
         <View style={styles.orb2} pointerEvents="none" />
+        <View style={styles.orb3} pointerEvents="none" />
 
         {/* ── HEADER ──────────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>
-              {viewMode === 'agenda' ? 'Agenda' : formatMonthName(currentMonth.year, currentMonth.month)}
-            </Text>
+            {viewMode === 'agenda' ? (
+              <Text style={styles.headerTitle}>Agenda</Text>
+            ) : (
+              <>
+                <Text style={styles.headerTitle}>
+                  {formatMonthName(today.getFullYear(), today.getMonth() + 1)}{' '}
+                  {today.getDate()}
+                </Text>
+                <Text style={styles.headerYear}>{today.getFullYear()}</Text>
+              </>
+            )}
             <Text style={styles.headerSub}>
               {eventsLoading
                 ? 'Refreshing…'
                 : viewMode === 'agenda'
                   ? `${agendaEvents.length} upcoming event${agendaEvents.length !== 1 ? 's' : ''}`
-                  : `${events.length} event${events.length !== 1 ? 's' : ''} · ${currentMonth.year}`}
+                  : `${events.length} event${events.length !== 1 ? 's' : ''} this month`}
             </Text>
           </View>
           <TouchableOpacity
@@ -404,7 +384,7 @@ export default function CalendarScreen() {
               >
                 {viewMode === tab.key ? (
                   <LinearGradient
-                    colors={['#7C3AED', '#5B21B6']}
+                    colors={['#7C3AED', '#8B5CF6', '#A855F7']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.segTabGrad}
@@ -414,7 +394,7 @@ export default function CalendarScreen() {
                   </LinearGradient>
                 ) : (
                   <View style={styles.segTabInner}>
-                    <Ionicons name={tab.icon} size={13} color="rgba(255,255,255,0.45)" />
+                    <Ionicons name={tab.icon} size={13} color="rgba(255,255,255,0.75)" />
                     <Text style={styles.segTabText}>{tab.label}</Text>
                   </View>
                 )}
@@ -433,17 +413,23 @@ export default function CalendarScreen() {
           {viewMode === 'month' && (
             <>
               {/* Custom Calendar Card */}
-              <View style={styles.calCard}>
+              <LinearGradient
+                colors={['#fbfbfb', '#e3e2e9', '#e19b46']}
+                locations={[0, 0.55, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.calCard}
+              >
                 {/* Month navigation */}
                 <View style={styles.calNav}>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => handleMonthStep(-1)} activeOpacity={0.7}>
-                    <Ionicons name="chevron-back" size={19} color="rgba(255,255,255,0.9)" />
+                    <Ionicons name="chevron-back" size={19} color="#6D28D9" />
                   </TouchableOpacity>
-                  <Text style={styles.calNavTitle}>
+                  <Text style={[styles.calNavTitle, { color: '#090909', fontSize: 20, fontWeight: '700' }]}>
                     {formatMonthYear(currentMonth.year, currentMonth.month)}
                   </Text>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => handleMonthStep(1)} activeOpacity={0.7}>
-                    <Ionicons name="chevron-forward" size={19} color="rgba(255,255,255,0.9)" />
+                    <Ionicons name="chevron-forward" size={19} color="#6D28D9" />
                   </TouchableOpacity>
                 </View>
 
@@ -451,7 +437,9 @@ export default function CalendarScreen() {
                 <View style={styles.calHeaders}>
                   {WEEKDAY_LABELS.map((w, i) => (
                     <View key={i} style={styles.calHeaderCell}>
-                      <Text style={styles.calHeaderText}>{w}</Text>
+                      <Text style={[styles.calHeaderText, { color: '#4f1ad6', fontSize: 12, fontWeight: '800' }]}>
+                        {w}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -459,73 +447,72 @@ export default function CalendarScreen() {
                 {/* Date grid */}
                 {calGrid.map((row, ri) => {
                   const spans = calEventSpans[ri] ?? [];
-                  const multiDayDateSet = new Set<string>();
-                  for (const span of spans) {
-                    for (let c = span.startCol; c <= span.endCol; c++) {
-                      const d = row[c];
-                      if (d !== null) {
-                        multiDayDateSet.add(`${currentMonth.year}-${String(currentMonth.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+
+                  // Merge overlapping/adjacent spans for per-cell background rendering
+                  const mergedSpans = spans.reduce<{ startCol: number; endCol: number; isEventStart: boolean; isEventEnd: boolean }[]>(
+                    (acc, span) => {
+                      const hit = acc.find(r => span.startCol <= r.endCol + 1 && span.endCol >= r.startCol - 1);
+                      if (hit) {
+                        if (span.startCol < hit.startCol) { hit.startCol = span.startCol; hit.isEventStart = span.isEventStart; }
+                        if (span.endCol > hit.endCol)     { hit.endCol = span.endCol;     hit.isEventEnd   = span.isEventEnd;   }
+                      } else {
+                        acc.push({ startCol: span.startCol, endCol: span.endCol, isEventStart: span.isEventStart, isEventEnd: span.isEventEnd });
                       }
-                    }
-                  }
+                      return acc;
+                    },
+                    []
+                  );
 
                   return (
-                    <View key={ri} style={[styles.calRow, { position: 'relative' }]}>
-                      {/* Multi-day event strips — merged into one green band per contiguous range */}
-                      {spans
-                        .reduce<{ startCol: number; endCol: number; isEventStart: boolean; isEventEnd: boolean }[]>((acc, span) => {
-                          const hit = acc.find(r => span.startCol <= r.endCol + 1 && span.endCol >= r.startCol - 1);
-                          if (hit) {
-                            if (span.startCol < hit.startCol) { hit.startCol = span.startCol; hit.isEventStart = span.isEventStart; }
-                            if (span.endCol > hit.endCol)     { hit.endCol = span.endCol;     hit.isEventEnd   = span.isEventEnd;   }
-                          } else {
-                            acc.push({ startCol: span.startCol, endCol: span.endCol, isEventStart: span.isEventStart, isEventEnd: span.isEventEnd });
-                          }
-                          return acc;
-                        }, [])
-                        .map((r, si) => (
+                    <View key={ri} style={styles.calRow}>
+                      {row.map((day, ci) => {
+                        // Per-cell span background — rendered inside each cell so it always paints
+                        const spanForCol = mergedSpans.find(r => ci >= r.startCol && ci <= r.endCol);
+                        const isInSpan = !!spanForCol;
+                        const isSpanStart = isInSpan && ci === spanForCol!.startCol;
+                        const isSpanEnd   = isInSpan && ci === spanForCol!.endCol;
+                        // Round a corner only at the TRUE event boundary, not just the row boundary
+                        const roundLeft  = isSpanStart && spanForCol!.isEventStart;
+                        const roundRight = isSpanEnd   && spanForCol!.isEventEnd;
+
+                        const spanBg = isInSpan ? (
                           <View
-                            key={si}
                             pointerEvents="none"
                             style={{
                               position: 'absolute',
-                              left: r.startCol * CELL_SIZE,
-                              width: (r.endCol - r.startCol + 1) * CELL_SIZE,
+                              left: roundLeft ? 4 : 0,
+                              right: roundRight ? 4 : 0,
                               top: 4,
-                              height: CELL_SIZE - 10,
-                              backgroundColor: '#fbfbfb38',
-                              borderTopLeftRadius: r.isEventStart ? 12 : 0,
-                              borderBottomLeftRadius: r.isEventStart ? 12 : 0,
-                              borderTopRightRadius: r.isEventEnd ? 12 : 0,
-                              borderBottomRightRadius: r.isEventEnd ? 12 : 0,
-                              borderLeftColor: '#ffffff',
-                              zIndex: 0,
+                              bottom: 4,
+                              backgroundColor: '#22C55E',
+                              borderTopLeftRadius: roundLeft ? 20 : 0,
+                              borderBottomLeftRadius: roundLeft ? 20 : 0,
+                              borderTopRightRadius: roundRight ? 20 : 0,
+                              borderBottomRightRadius: roundRight ? 20 : 0,
                             }}
                           />
-                        ))}
+                        ) : null;
 
-                      {row.map((day, ci) => {
                         if (day === null) {
-                          return <View key={ci} style={styles.calCell} />;
+                          return (
+                            <View key={ci} style={styles.calCell}>
+                              {spanBg}
+                            </View>
+                          );
                         }
+
                         const ds = `${currentMonth.year}-${String(currentMonth.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                         const isToday = ds === todayStr;
                         const isSelected = ds === selectedDate;
                         const dayEvts = dateEventMap[ds] ?? [];
-                        const isMultiDay = multiDayDateSet.has(ds);
-                        const singleDayEvts = isMultiDay
-                          ? dayEvts.filter(e => {
-                              const s = e.date_start.split('T')[0];
-                              const en = e.date_end ? e.date_end.split('T')[0] : s;
-                              return s === en;
-                            })
-                          : dayEvts;
-                        const dotColors = singleDayEvts.slice(0, 2).map(() => '#10B981');
+                        // Any event on this day → show green capsule,
+                        // unless already covered by a multi-day span bar
+                        const hasEvent = dayEvts.length > 0;
 
                         return (
                           <TouchableOpacity
                             key={ci}
-                            style={[styles.calCell, { zIndex: 1 }]}
+                            style={styles.calCell}
                             onPress={() => {
                               setSelectedDate(ds);
                               if (dayEvts.length > 0) {
@@ -535,9 +522,10 @@ export default function CalendarScreen() {
                             }}
                             activeOpacity={0.7}
                           >
+                            {spanBg}
                             {isSelected ? (
                               <LinearGradient
-                                colors={['#F97316', '#EF4444']}
+                                colors={['#F59E0B', '#FB923C', '#F97316']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={styles.calDayCapsule}
@@ -546,7 +534,16 @@ export default function CalendarScreen() {
                               </LinearGradient>
                             ) : isToday ? (
                               <LinearGradient
-                                colors={['#7C3AED', '#5B21B6']}
+                                colors={['#8B5CF6', '#7C3AED']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.calDayCapsule}
+                              >
+                                <Text style={styles.calDayTextBright}>{day}</Text>
+                              </LinearGradient>
+                            ) : hasEvent && !isInSpan ? (
+                              <LinearGradient
+                                colors={['#22C55E', '#16A34A']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={styles.calDayCapsule}
@@ -557,17 +554,10 @@ export default function CalendarScreen() {
                               <View style={styles.calDayNormal}>
                                 <Text style={[
                                   styles.calDayText,
-                                  dayEvts.length > 0 && styles.calDayTextHasEvent,
+                                  isInSpan && { color: '#FFFFFF', fontWeight: '800' },
                                 ]}>
                                   {day}
                                 </Text>
-                              </View>
-                            )}
-                            {dotColors.length > 0 && (
-                              <View style={styles.calDots}>
-                                {dotColors.map((c, di) => (
-                                  <View key={di} style={[styles.calDot, { backgroundColor: c }]} />
-                                ))}
                               </View>
                             )}
                           </TouchableOpacity>
@@ -576,23 +566,7 @@ export default function CalendarScreen() {
                     </View>
                   );
                 })}
-
-                {/* Legend */}
-                <View style={styles.calLegend}>
-                  {LEGEND_ITEMS.map(item => {
-                    const count = statusCountsMap[item.key] ?? 0;
-                    return (
-                      <View key={item.key} style={styles.calLegendItem}>
-                        <View style={[styles.calLegendDot, { backgroundColor: item.color }]} />
-                        <Text style={styles.calLegendLabel}>{item.label}</Text>
-                        {count > 0 && (
-                          <Text style={[styles.calLegendCount, { color: item.color }]}>{count}</Text>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
+              </LinearGradient>
 
               {/* Day timeline */}
               <DayPanel
@@ -611,7 +585,7 @@ export default function CalendarScreen() {
               <View style={styles.weekCard}>
                 <View style={styles.weekNav}>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => goWeek(-1)} activeOpacity={0.7}>
-                    <Ionicons name="chevron-back" size={18} color="rgba(255,255,255,0.9)" />
+                    <Ionicons name="chevron-back" size={18} color="#6D28D9" />
                   </TouchableOpacity>
                   <Text style={styles.weekRangeText}>
                     {new Date(weekDays[0] + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -619,7 +593,7 @@ export default function CalendarScreen() {
                     {new Date(weekDays[6] + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </Text>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => goWeek(1)} activeOpacity={0.7}>
-                    <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.9)" />
+                    <Ionicons name="chevron-forward" size={18} color="#6D28D9" />
                   </TouchableOpacity>
                 </View>
 
@@ -636,19 +610,19 @@ export default function CalendarScreen() {
                         onPress={() => setSelectedDate(ds)}
                         activeOpacity={0.75}
                       >
-                        <Text style={[styles.weekDayName, isToday && { color: '#A78BFA' }]}>
+                        <Text style={[styles.weekDayName, isToday && { color: '#7C3AED' }]}>
                           {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
                         </Text>
                         {isSelected ? (
                           <LinearGradient
-                            colors={['#F97316', '#EF4444']}
+                            colors={['#F59E0B', '#FB923C', '#F97316']}
                             style={styles.weekDayCircleSel}
                           >
                             <Text style={styles.weekDayNumTextSel}>{d.getDate()}</Text>
                           </LinearGradient>
                         ) : isToday ? (
                           <LinearGradient
-                            colors={['#7C3AED', '#5B21B6']}
+                            colors={['#8B5CF6', '#7C3AED']}
                             style={styles.weekDayCircleSel}
                           >
                             <Text style={styles.weekDayNumTextSel}>{d.getDate()}</Text>
@@ -662,7 +636,7 @@ export default function CalendarScreen() {
                           {dayEvts.slice(0, 3).map((_, i) => (
                             <View
                               key={i}
-                              style={[styles.weekDot, { backgroundColor: '#10B981' }]}
+                              style={[styles.weekDot, { backgroundColor: '#22C55E' }]}
                             />
                           ))}
                         </View>
@@ -711,7 +685,7 @@ export default function CalendarScreen() {
                         <View key={dk} style={styles.agendaDateRow}>
                           {isToday ? (
                             <LinearGradient
-                              colors={['#7C3AED', '#5B21B6']}
+                              colors={['#7C3AED', '#A855F7']}
                               style={styles.agendaDateBubble}
                             >
                               <Text style={[styles.agendaDateDay, { color: '#fff' }]}>
@@ -758,7 +732,7 @@ export default function CalendarScreen() {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={['#7C3AED', '#5B21B6']}
+              colors={['#7C3AED', '#6D28D9', '#A855F7']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.fabGrad}
@@ -801,7 +775,7 @@ function DayPanel({
       <View style={styles.dayPanelHeader}>
         <View style={styles.dayPanelLeft}>
           {isToday ? (
-            <LinearGradient colors={['#7C3AED', '#5B21B6']} style={styles.dayCircle}>
+            <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.dayCircle}>
               <Text style={styles.dayCircleNumActive}>{d.getDate()}</Text>
             </LinearGradient>
           ) : (
@@ -821,10 +795,10 @@ function DayPanel({
         </View>
         <View style={styles.dayPanelNav}>
           <TouchableOpacity style={styles.navArrow} onPress={() => onNavigate(addDays(dateStr, -1))}>
-            <Ionicons name="chevron-back" size={15} color="rgba(255,255,255,0.9)" />
+            <Ionicons name="chevron-back" size={15} color="#6D28D9" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.navArrow} onPress={() => onNavigate(addDays(dateStr, 1))}>
-            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.9)" />
+            <Ionicons name="chevron-forward" size={15} color="#6D28D9" />
           </TouchableOpacity>
         </View>
       </View>
@@ -835,7 +809,7 @@ function DayPanel({
         </View>
       ) : events.length === 0 ? (
         <View style={styles.noDayEvents}>
-          <Ionicons name="calendar-outline" size={19} color="rgba(255,255,255,0.25)" />
+          <Ionicons name="calendar-outline" size={19} color="#7C3AED" />
           <Text style={styles.noDayText}>No events on this day</Text>
         </View>
       ) : (
@@ -852,36 +826,27 @@ function DayPanel({
 }
 
 function PremiumEventCard({ event, onPress }: { event: Event; onPress: () => void }) {
-  const stripeColor = STATUS_COLORS[event.status] ?? '#A78BFA';
-  const statusLabel = STATUS_LABELS[event.status] ?? event.status;
-
   return (
     <TouchableOpacity style={styles.premCard} onPress={onPress} activeOpacity={0.8}>
-      <View style={[styles.premStripe, { backgroundColor: stripeColor }]} />
+      <View style={[styles.premStripe, { backgroundColor: '#7C3AED' }]} />
       <View style={styles.premIconBox}>
         <Text style={{ fontSize: 17 }}>{eventTypeIcons[event.event_type] ?? '📅'}</Text>
       </View>
       <View style={styles.premBody}>
         <Text style={styles.premTitle} numberOfLines={1}>{event.title}</Text>
         <View style={styles.premMeta}>
-          <Ionicons name="time-outline" size={10} color="rgba(255,255,255,0.45)" />
+          <Ionicons name="time-outline" size={10} color="#6B7280" />
           <Text style={styles.premMetaText}>{formatTime(event.date_start)}</Text>
           {(event as any).venue?.city && (
             <>
               <Text style={styles.premMetaDot}>·</Text>
-              <Ionicons name="location-outline" size={10} color="rgba(255,255,255,0.45)" />
+              <Ionicons name="location-outline" size={10} color="#6B7280" />
               <Text style={styles.premMetaText}>{(event as any).venue.city}</Text>
             </>
           )}
         </View>
       </View>
-      <View style={[
-        styles.premStatusPill,
-        { borderColor: stripeColor + '55', backgroundColor: stripeColor + '18' },
-      ]}>
-        <Text style={[styles.premStatusText, { color: stripeColor }]}>{statusLabel}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.25)" style={{ marginRight: 10 }} />
+      <Ionicons name="chevron-forward" size={12} color="#9CA3AF" style={{ marginRight: 10 }} />
     </TouchableOpacity>
   );
 }
@@ -890,7 +855,7 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <View style={styles.emptyWrap}>
       <LinearGradient
-        colors={['rgba(124,58,237,0.25)', 'rgba(91,33,182,0.25)']}
+        colors={['rgba(124,58,237,0.32)', 'rgba(168,85,247,0.18)']}
         style={styles.emptyIconCircle}
       >
         <Ionicons name="calendar-outline" size={32} color="#A78BFA" />
@@ -911,12 +876,14 @@ function DatePopupModal({
   onEventPress: (id: string) => void;
 }) {
   const [currentPage, setCurrentPage] = useState(0);
+  const [fullPosterUrl, setFullPosterUrl] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const cardWidth = SCREEN_W - 48;
 
   useEffect(() => {
     if (visible) {
       setCurrentPage(0);
+      setFullPosterUrl(null);
       scrollRef.current?.scrollTo({ x: 0, animated: false });
     }
   }, [visible, dateStr]);
@@ -942,7 +909,7 @@ function DatePopupModal({
 
           {/* ── Header ── */}
           <View style={popupStyles.header}>
-            <LinearGradient colors={['#10B981', '#059669']} style={popupStyles.dateBadge}>
+            <LinearGradient colors={['#7C3AED', '#A855F7']} style={popupStyles.dateBadge}>
               <Text style={popupStyles.dateBadgeNum}>{d.getDate()}</Text>
             </LinearGradient>
             <View style={popupStyles.headerMid}>
@@ -1006,13 +973,22 @@ function DatePopupModal({
                       </View>
                     )}
                     <LinearGradient
-                      colors={['transparent', 'rgba(22,11,58,0.88)']}
+                      colors={['transparent', 'rgba(26,14,64,0.92)']}
                       style={popupStyles.posterGradient}
                     />
-                    <View style={popupStyles.posterExpandBtn}>
-                      <Ionicons name="expand-outline" size={13} color="#fff" />
-                      <Text style={popupStyles.posterExpandText}>View full</Text>
-                    </View>
+                    {ev.poster_url && (
+                      <TouchableOpacity
+                        style={popupStyles.posterExpandBtn}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setFullPosterUrl(ev.poster_url!);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="expand-outline" size={13} color="#fff" />
+                        <Text style={popupStyles.posterExpandText}>View full</Text>
+                      </TouchableOpacity>
+                    )}
                   </TouchableOpacity>
 
                   {/* Info section */}
@@ -1021,14 +997,14 @@ function DatePopupModal({
                     <View style={popupStyles.metaList}>
                       <View style={popupStyles.metaRow}>
                         <View style={popupStyles.metaIconBox}>
-                          <Ionicons name="time-outline" size={14} color="#10B981" />
+                          <Ionicons name="time-outline" size={14} color="#A78BFA" />
                         </View>
                         <Text style={popupStyles.metaText}>{formatTime(ev.date_start)}</Text>
                       </View>
                       {location && (
                         <View style={popupStyles.metaRow}>
                           <View style={popupStyles.metaIconBox}>
-                            <Ionicons name="location-outline" size={14} color="#10B981" />
+                            <Ionicons name="location-outline" size={14} color="#A78BFA" />
                           </View>
                           <Text style={popupStyles.metaText} numberOfLines={1}>{location}</Text>
                         </View>
@@ -1041,7 +1017,7 @@ function DatePopupModal({
                       activeOpacity={0.8}
                     >
                       <LinearGradient
-                        colors={['#10B981', '#059669']}
+                        colors={['#7C3AED', '#8B5CF6', '#A855F7']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={popupStyles.openBtnGrad}
@@ -1071,6 +1047,37 @@ function DatePopupModal({
 
         </View>
       </View>
+
+      {/* ── Full-screen poster viewer ── */}
+      <Modal
+        visible={fullPosterUrl !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullPosterUrl(null)}
+        statusBarTranslucent
+      >
+        <View style={popupStyles.fullPosterBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setFullPosterUrl(null)}
+          />
+          {fullPosterUrl && (
+            <Image
+              source={{ uri: fullPosterUrl }}
+              style={popupStyles.fullPosterImage}
+              resizeMode="contain"
+            />
+          )}
+          <TouchableOpacity
+            style={popupStyles.fullPosterClose}
+            onPress={() => setFullPosterUrl(null)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="close" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -1080,23 +1087,36 @@ function DatePopupModal({
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
+  // Warm orange ambient light — NOT a visible shape, just soft warmth bleeding in from lower-right
   orb1: {
     position: 'absolute',
-    top: -60,
-    right: -50,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: 'rgba(124,58,237,0.18)',
+    bottom: -60,
+    right: -140,
+    width: 520,
+    height: 520,
+    borderRadius: 260,
+    backgroundColor: 'rgba(251,146,60,0.20)',
   },
+  // Lavender glow — center area softener for glassmorphism feel
   orb2: {
     position: 'absolute',
-    bottom: 120,
-    left: -70,
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    backgroundColor: 'rgba(109,40,217,0.12)',
+    top: 260,
+    left: -30,
+    width: 380,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: 'rgba(196,181,253,0.18)',
+  },
+
+  // White diffusion glow — center-right, creates the airy glassmorphism softness
+  orb3: {
+    position: 'absolute',
+    top: 340,
+    right: -20,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
 
   // Header
@@ -1105,8 +1125,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 14,
     gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.10)',
+    marginBottom: 4,
   },
   headerTitle: {
     fontSize: 40,
@@ -1115,11 +1139,18 @@ const styles = StyleSheet.create({
     letterSpacing: -1.2,
     lineHeight: 44,
   },
+  headerYear: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    letterSpacing: 1,
+    marginTop: -2,
+  },
   headerSub: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(255,255,255,0.72)',
     fontWeight: '500',
-    marginTop: 2,
+    marginTop: 4,
   },
   todayBtn: {
     flexDirection: 'row',
@@ -1138,11 +1169,11 @@ const styles = StyleSheet.create({
   segWrap: { paddingHorizontal: 16, marginBottom: 12 },
   segContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 18,
     padding: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.08)',
     gap: 3,
   },
   segTab: { flex: 1, borderRadius: 14, overflow: 'hidden' },
@@ -1161,22 +1192,26 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingVertical: 9,
   },
-  segTabText: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.45)' },
+  segTabText: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.75)' },
   segTabTextActive: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
   scroll: { paddingBottom: 110 },
 
   // Calendar card
   calCard: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
     marginHorizontal: 16,
     borderRadius: 28,
     paddingHorizontal: CAL_H_PAD,
     paddingTop: 16,
     paddingBottom: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(124,58,237,0.14)',
     marginBottom: 12,
+    shadowColor: '#6D28D9',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 24,
+    elevation: 8,
   },
   calNav: {
     flexDirection: 'row',
@@ -1188,16 +1223,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(109,40,217,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.13)',
+    borderColor: 'rgba(109,40,217,0.15)',
   },
   calNavTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#fff',
+    color: '#1F1F3A',
     letterSpacing: 0.2,
   },
   calHeaders: { flexDirection: 'row', marginBottom: 4 },
@@ -1205,7 +1240,7 @@ const styles = StyleSheet.create({
   calHeaderText: {
     fontSize: 11,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.42)',
+    color: 'rgba(109,40,217,0.6)',
     letterSpacing: 0.5,
   },
   calRow: { flexDirection: 'row', marginBottom: 1 },
@@ -1233,31 +1268,10 @@ const styles = StyleSheet.create({
   calDayText: {
     fontSize: 14,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.65)',
+    color: '#374151',
   },
-  calDayTextHasEvent: { color: '#fff', fontWeight: '700' },
+  calDayTextHasEvent: { color: '#111827', fontWeight: '800' },
   calDayTextBright: { fontSize: 14, fontWeight: '800', color: '#fff' },
-  calDots: {
-    flexDirection: 'row',
-    gap: 2,
-    marginTop: 1,
-    justifyContent: 'center',
-  },
-  calDot: { width: 4, height: 4, borderRadius: 2 },
-
-  // Legend
-  calLegend: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
-  },
-  calLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  calLegendDot: { width: 7, height: 7, borderRadius: 3.5 },
-  calLegendLabel: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.45)' },
-  calLegendCount: { fontSize: 10, fontWeight: '800', marginLeft: 1 },
 
   // Stats
   statsRow: {
@@ -1299,7 +1313,17 @@ const styles = StyleSheet.create({
   },
 
   // Day panel (timeline)
-  dayPanel: { paddingHorizontal: 16, marginTop: 4 },
+  dayPanel: {
+    paddingHorizontal: 16,
+    marginTop: 4,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderRadius: 24,
+    paddingTop: 14,
+    paddingBottom: 14,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.10)',
+  },
   dayPanelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1315,84 +1339,85 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dayCircleInactive: {
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(109,40,217,0.08)',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.13)',
+    borderColor: 'rgba(109,40,217,0.18)',
   },
-  dayCircleNum: { fontSize: 19, fontWeight: '800', color: 'rgba(255,255,255,0.75)' },
+  dayCircleNum: { fontSize: 19, fontWeight: '800', color: '#374151' },
   dayCircleNumActive: { fontSize: 19, fontWeight: '800', color: '#fff' },
-  dayFullLabel: { fontSize: 15, fontWeight: '700', color: '#fff' },
-  dayMonthLabel: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 1 },
+  dayFullLabel: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  dayMonthLabel: { fontSize: 12, color: '#374151', marginTop: 1 },
   dayPanelNav: { flexDirection: 'row', gap: 8 },
   navArrow: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(109,40,217,0.07)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(109,40,217,0.15)',
   },
   eventsLoader: { paddingVertical: 24, alignItems: 'center' },
   noDayEvents: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     borderRadius: 18,
     padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: 'rgba(109,40,217,0.1)',
     marginBottom: 8,
   },
-  noDayText: { color: 'rgba(255,255,255,0.38)', fontSize: 14, fontWeight: '500' },
+  noDayText: { color: '#4B5563', fontSize: 14, fontWeight: '500' },
 
   // Premium event card
   premCard: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
     borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: 'rgba(124,58,237,0.12)',
+    shadowColor: '#6D28D9',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
   premStripe: { width: 3.5, alignSelf: 'stretch' },
   premIconBox: {
     width: 40,
     height: 40,
     borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(109,40,217,0.07)',
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 10,
   },
   premBody: { flex: 1, paddingVertical: 12 },
-  premTitle: { fontSize: 13, fontWeight: '700', color: '#fff', marginBottom: 4 },
+  premTitle: { fontSize: 13, fontWeight: '700', color: '#111827', marginBottom: 4 },
   premMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, flexWrap: 'wrap' },
-  premMetaText: { fontSize: 11, color: 'rgba(255,255,255,0.45)' },
-  premMetaDot: { fontSize: 11, color: 'rgba(255,255,255,0.25)' },
-  premStatusPill: {
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    marginRight: 6,
-  },
-  premStatusText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-
+  premMetaText: { fontSize: 11, color: '#4B5563' },
+  premMetaDot: { fontSize: 11, color: '#6B7280' },
   // Week view
   weekCard: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     marginHorizontal: 16,
     borderRadius: 24,
     overflow: 'hidden',
     paddingBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(124,58,237,0.14)',
     marginBottom: 12,
+    shadowColor: '#6D28D9',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 24,
+    elevation: 8,
   },
   weekNav: {
     flexDirection: 'row',
@@ -1401,15 +1426,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.07)',
+    borderBottomColor: 'rgba(109,40,217,0.1)',
   },
-  weekRangeText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  weekRangeText: { fontSize: 13, fontWeight: '700', color: '#1F1F3A' },
   weekDays: { flexDirection: 'row', paddingTop: 14, paddingHorizontal: 8 },
   weekDayCol: { flex: 1, alignItems: 'center', gap: 6 },
   weekDayName: {
     fontSize: 11,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.4)',
+    color: '#9CA3AF',
     letterSpacing: 0.3,
   },
   weekDayCircle: {
@@ -1418,7 +1443,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(109,40,217,0.06)',
   },
   weekDayCircleSel: {
     width: 36,
@@ -1427,7 +1452,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  weekDayNumText: { fontSize: 14, fontWeight: '700', color: 'rgba(255,255,255,0.75)' },
+  weekDayNumText: { fontSize: 14, fontWeight: '700', color: '#374151' },
   weekDayNumTextSel: { fontSize: 14, fontWeight: '800', color: '#fff' },
   weekDots: { flexDirection: 'row', gap: 2, height: 8, alignItems: 'center' },
   weekDot: { width: 5, height: 5, borderRadius: 2.5 },
@@ -1444,42 +1469,42 @@ const styles = StyleSheet.create({
   agendaMonthText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#A78BFA',
+    color: '#7C3AED',
     letterSpacing: 1.5,
   },
-  agendaMonthLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.09)' },
+  agendaMonthLine: { flex: 1, height: 1, backgroundColor: 'rgba(124,58,237,0.15)' },
   agendaMonthBadge: {
-    backgroundColor: 'rgba(124,58,237,0.28)',
+    backgroundColor: 'rgba(124,58,237,0.1)',
     borderRadius: 20,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 1,
-    borderColor: 'rgba(167,139,250,0.35)',
+    borderColor: 'rgba(124,58,237,0.25)',
   },
-  agendaMonthBadgeText: { fontSize: 11, fontWeight: '800', color: '#A78BFA' },
+  agendaMonthBadgeText: { fontSize: 11, fontWeight: '800', color: '#7C3AED' },
   agendaDateRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   agendaDateBubble: {
     width: 52,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(124,58,237,0.15)',
     alignSelf: 'flex-start',
     overflow: 'hidden',
   },
   agendaDateDay: {
     fontSize: 19,
     fontWeight: '800',
-    color: '#fff',
+    color: '#111827',
     letterSpacing: -0.5,
   },
   agendaDateMon: {
     fontSize: 9,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.4)',
+    color: '#6B7280',
     letterSpacing: 0.5,
     marginTop: 1,
   },
@@ -1497,8 +1522,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(167,139,250,0.25)',
     marginBottom: 4,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#fff' },
-  emptySubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.45)', textAlign: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
+  emptySubtitle: { fontSize: 14, color: '#374151', textAlign: 'center' },
 
   // FAB
   fab: {
@@ -1509,11 +1534,11 @@ const styles = StyleSheet.create({
     height: 62,
     borderRadius: 31,
     overflow: 'hidden',
-    shadowColor: '#7C3AED',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 14,
-    elevation: 10,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.55,
+    shadowRadius: 30,
+    elevation: 16,
   },
   fabGrad: {
     flex: 1,
@@ -1530,15 +1555,15 @@ const popupStyles = StyleSheet.create({
     alignItems: 'center',
   },
   card: {
-    backgroundColor: '#160B3A',
+    backgroundColor: '#1A0E40',
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: 'rgba(167,139,250,0.25)',
+    borderColor: 'rgba(167,139,250,0.30)',
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: '#8B5CF6',
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.65,
-    shadowRadius: 28,
+    shadowOpacity: 0.35,
+    shadowRadius: 30,
     elevation: 20,
   },
   header: {
@@ -1566,14 +1591,14 @@ const popupStyles = StyleSheet.create({
   headerWeekday: { fontSize: 16, fontWeight: '800', color: '#fff' },
   headerMonth: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   pageCounter: {
-    backgroundColor: 'rgba(16,185,129,0.15)',
+    backgroundColor: 'rgba(124,58,237,0.18)',
     borderRadius: 12,
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: 'rgba(16,185,129,0.3)',
+    borderColor: 'rgba(167,139,250,0.35)',
   },
-  pageCounterText: { fontSize: 11, fontWeight: '800', color: '#10B981' },
+  pageCounterText: { fontSize: 11, fontWeight: '800', color: '#A78BFA' },
   closeBtn: {
     width: 34,
     height: 34,
@@ -1589,14 +1614,14 @@ const popupStyles = StyleSheet.create({
   posterBanner: {
     width: '100%',
     height: 200,
-    backgroundColor: 'rgba(124,58,237,0.2)',
+    backgroundColor: 'rgba(76,29,149,0.30)',
     overflow: 'hidden',
   },
   posterFallback: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(124,58,237,0.18)',
+    backgroundColor: 'rgba(76,29,149,0.35)',
   },
   posterGradient: {
     position: 'absolute',
@@ -1639,7 +1664,7 @@ const popupStyles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 9,
-    backgroundColor: 'rgba(16,185,129,0.12)',
+    backgroundColor: 'rgba(124,58,237,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1673,7 +1698,7 @@ const popupStyles = StyleSheet.create({
     width: 22,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: '#A855F7',
   },
   swipeHint: {
     fontSize: 10,
@@ -1681,5 +1706,28 @@ const popupStyles = StyleSheet.create({
     color: 'rgba(255,255,255,0.3)',
     marginLeft: 4,
     letterSpacing: 0.3,
+  },
+  fullPosterBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.96)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullPosterImage: {
+    width: SCREEN_W,
+    height: SCREEN_W * 1.5,
+  },
+  fullPosterClose: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
 });

@@ -21,7 +21,6 @@ import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   getEventById,
-  updateEventStatus,
   deleteEvent,
   getNotes,
   addNote,
@@ -146,42 +145,6 @@ export default function EventDetailScreen() {
     }
   }, [loading, event]);
 
-  const handleApprove = async () => {
-    if (!event || !user) return;
-    Alert.alert('Approve Event', 'Confirm this event?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Approve', onPress: async () => {
-          await updateEventStatus(
-            event.id, 'confirmed',
-            event.created_by,
-            'Event Approved',
-            `"${event.title}" has been approved by Boss`
-          );
-          loadEvent();
-        }
-      },
-    ]);
-  };
-
-  const handleReject = async () => {
-    if (!event || !user) return;
-    Alert.alert('Reject Event', 'Reject this event?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Reject', style: 'destructive', onPress: async () => {
-          await updateEventStatus(
-            event.id, 'rejected',
-            event.created_by,
-            'Event Rejected',
-            `"${event.title}" was rejected — please review and resubmit`
-          );
-          loadEvent();
-        }
-      },
-    ]);
-  };
-
   const handleDelete = () => {
     Alert.alert(
       'Delete Event',
@@ -200,18 +163,6 @@ export default function EventDetailScreen() {
         },
       ]
     );
-  };
-
-  const handleResubmit = async () => {
-    if (!event) return;
-    const { data: bossUser } = await supabase.from('users').select('id').eq('role', 'boss').single();
-    await updateEventStatus(
-      event.id, 'tentative',
-      bossUser?.id,
-      'Event Resubmitted',
-      `"${event.title}" has been updated and resubmitted for approval`
-    );
-    loadEvent();
   };
 
   const handleAddNote = async () => {
@@ -458,29 +409,6 @@ export default function EventDetailScreen() {
           style={[styles.innerContent, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
         >
 
-          {/* Boss approve / reject */}
-          {isBoss && event.status === 'tentative' && (
-            <View style={styles.approvalBtns}>
-              <TouchableOpacity style={styles.approveBtn} onPress={handleApprove} activeOpacity={0.87}>
-                <LinearGradient colors={['#16A34A', '#15803D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionGrad}>
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                  <Text style={styles.approveBtnText}>Approve</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.rejectBtn} onPress={handleReject} activeOpacity={0.87}>
-                <LinearGradient colors={['#DC2626', '#B91C1C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionGrad}>
-                  <Ionicons name="close-circle" size={20} color="#fff" />
-                  <Text style={styles.rejectBtnText}>Reject</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          )}
-          {isAssistant && event.status === 'rejected' && (
-            <TouchableOpacity style={styles.resubmitBtn} onPress={handleResubmit} activeOpacity={0.85}>
-              <Ionicons name="refresh" size={16} color={colors.primary} />
-              <Text style={styles.resubmitText}>Edit & Resubmit</Text>
-            </TouchableOpacity>
-          )}
 
           {/* ── Event Details ── */}
           <View onLayout={trackY('details')}>

@@ -23,9 +23,7 @@ import { getUpcomingEvents, getNotifications } from '../../services/events';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useRealtimeEvents, useRealtimeNotifications } from '../../hooks/useRealtimeEvents';
 import { Event } from '../../types';
-import StatusBadge from '../../components/StatusBadge';
-import { colors, shadow, radius, statusColors, eventTypeLabels, eventTypeIcons } from '../../constants/theme';
-import { supabase } from '../../lib/supabase';
+import { colors, shadow, radius, eventTypeLabels, eventTypeIcons } from '../../constants/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -71,7 +69,6 @@ export default function HomeScreen() {
   const isBoss = user?.role === 'boss';
 
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
-  const [pendingApprovals, setPendingApprovals] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { setNotifications, unreadCount } = useNotificationStore();
@@ -80,14 +77,6 @@ export default function HomeScreen() {
     try {
       const upcoming = await getUpcomingEvents(10);
       setUpcomingEvents(upcoming);
-      if (isBoss) {
-        const { data } = await supabase
-          .from('events')
-          .select('*, venue:venues(*)')
-          .eq('status', 'tentative')
-          .order('date_start', { ascending: true });
-        setPendingApprovals((data || []) as Event[]);
-      }
       if (user) {
         const notifs = await getNotifications(user.id);
         setNotifications(notifs);
@@ -116,15 +105,14 @@ export default function HomeScreen() {
   // append first card at end so swipe past last loops back seamlessly
   const carouselEvents = heroEvents.length > 0 ? [...heroEvents, heroEvents[0]] : [];
 
-  const nextEvent = upcomingEvents[0];
-  const restEvents = upcomingEvents.slice(1, 6);
+  const restEvents = upcomingEvents.slice(0, 8);
 
   const allRegions = [...new Set(
     upcomingEvents.map(e => e.venue?.region).filter(Boolean) as string[]
   )].sort();
 
   const filteredRestEvents = regionFilter
-    ? upcomingEvents.filter(e => e.venue?.region === regionFilter).slice(0, 6)
+    ? upcomingEvents.filter(e => e.venue?.region === regionFilter).slice(0, 8)
     : restEvents;
   const todayCount = upcomingEvents.filter(
     (e) => new Date(e.date_start).toDateString() === new Date().toDateString()
@@ -185,17 +173,6 @@ export default function HomeScreen() {
               <Text style={styles.statNumber}>{todayCount}</Text>
               <Text style={styles.statLabel}>Today</Text>
             </View>
-            {isBoss && (
-              <>
-                <View style={styles.statDivider} />
-                <View style={styles.statCard}>
-                  <Text style={[styles.statNumber, pendingApprovals.length > 0 && { color: '#FCD34D' }]}>
-                    {pendingApprovals.length}
-                  </Text>
-                  <Text style={styles.statLabel}>Pending</Text>
-                </View>
-              </>
-            )}
           </View>
 
           {/* Next Event carousel inside hero */}
@@ -332,46 +309,24 @@ export default function HomeScreen() {
             </View>
           ) : (
             <>
-              {/* Pending Approvals — boss only */}
-              {isBoss && pendingApprovals.length > 0 && (
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <View style={styles.urgentDot} />
-                    <Text style={[styles.sectionTitle, { color: colors.warning }]}>Action Required</Text>
-                    <View style={styles.urgentBadge}>
-                      <Text style={styles.urgentBadgeText}>{pendingApprovals.length}</Text>
-                    </View>
-                  </View>
 
-                  <View style={[styles.approvalGroup, shadow.xs]}>
-                    {pendingApprovals.map((event, i) => (
-                      <TouchableOpacity
-                        key={event.id}
-                        style={[
-                          styles.approvalRow,
-                          i < pendingApprovals.length - 1 && styles.approvalRowBorder,
-                        ]}
-                        onPress={() => navigation.navigate('EventDetail', { eventId: event.id })}
-                        activeOpacity={0.75}
-                      >
-                        <View style={styles.approvalEmoji}>
-                          <Text style={{ fontSize: 20 }}>{eventTypeIcons[event.event_type] ?? '📅'}</Text>
-                        </View>
-                        <View style={styles.approvalBody}>
-                          <Text style={styles.approvalTitle} numberOfLines={1}>{event.title}</Text>
-                          <Text style={styles.approvalMeta}>{formatDate(event.date_start)}{event.venue?.city ? ` · ${event.venue.city}` : ''}</Text>
-                        </View>
-                        <View style={styles.approvalArrow}>
-                          <Ionicons name="chevron-forward" size={16} color={colors.warning} />
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+              {/* Empty state */}
+              {upcomingEvents.length === 0 && (
+                <View style={styles.emptyState}>
+                  <View style={styles.emptyIconWrap}>
+                    <Ionicons name="calendar-outline" size={40} color="#7C3AED" />
                   </View>
+                  <Text style={styles.emptyTitle}>No Events Scheduled</Text>
+                  <Text style={styles.emptySubtitle}>
+                    {isAssistant
+                      ? 'Tap the + button to add your first event.'
+                      : 'No upcoming events have been added yet.'}
+                  </Text>
                 </View>
               )}
 
               {/* Upcoming list */}
-              {restEvents.length > 0 && (
+              {upcomingEvents.length > 0 && (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Upcoming Events</Text>
@@ -421,7 +376,6 @@ export default function HomeScreen() {
                     </View>
                   ) : filteredRestEvents.map((event) => {
                     const { day, month } = dateBlock(event.date_start);
-                    const statusColor = statusColors[event.status] ?? colors.inactive;
                     return (
                       <TouchableOpacity
                         key={event.id}
@@ -430,8 +384,8 @@ export default function HomeScreen() {
                         activeOpacity={0.8}
                       >
                         {/* Date column */}
-                        <View style={[styles.dateCol, { borderRightColor: statusColor }]}>
-                          <Text style={[styles.dateDay, { color: statusColor }]}>{day}</Text>
+                        <View style={[styles.dateCol, { borderRightColor: colors.success }]}>
+                          <Text style={[styles.dateDay, { color: colors.success }]}>{day}</Text>
                           <Text style={styles.dateMonth}>{month}</Text>
                         </View>
 
@@ -452,8 +406,8 @@ export default function HomeScreen() {
                             <Text style={styles.timelineMetaText}>{formatTime(event.date_start)}</Text>
                           </View>
                         </View>
+                        <Ionicons name="chevron-forward" size={16} color={colors.inactive} style={{ marginRight: 12 }} />
 
-                        <StatusBadge status={event.status} size="sm" />
                       </TouchableOpacity>
                     );
                   })}
@@ -583,6 +537,36 @@ const styles = StyleSheet.create({
 
   loadingWrap: { alignItems: 'center', paddingTop: 60, gap: 12 },
   loadingText: { color: colors.textSecondary, fontSize: 14 },
+
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: 48,
+    paddingBottom: 32,
+    paddingHorizontal: 24,
+  },
+  emptyIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F5F3FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
   // Section headers
   section: { marginBottom: 24 },

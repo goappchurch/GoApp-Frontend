@@ -51,7 +51,6 @@ export async function getUpcomingEvents(limit = 5): Promise<Event[]> {
       accommodation:accommodation(*)
     `)
     .gte('date_start', cutoff.toISOString())
-    .in('status', ['tentative', 'confirmed'])
     .order('date_start', { ascending: true })
     .limit(limit);
 
@@ -80,11 +79,14 @@ export async function getEventsByMonth(year: number, month: number): Promise<Eve
   const start = new Date(year, month - 1, 1).toISOString();
   const end = new Date(year, month, 0, 23, 59, 59).toISOString();
 
+  // Fetch any event that overlaps with this month:
+  //   • Multi-day:  date_start <= month_end  AND  date_end >= month_start
+  //   • Single-day: date_end IS NULL  AND  date_start within month
   const { data, error } = await supabase
     .from('events')
     .select('*, venue:venues(*)')
-    .gte('date_start', start)
     .lte('date_start', end)
+    .or(`date_end.gte.${start},and(date_end.is.null,date_start.gte.${start})`)
     .order('date_start', { ascending: true });
 
   if (error) throw error;
@@ -104,7 +106,6 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
       expected_audience: formData.expected_audience,
       companions: formData.companions ?? [],
       poster_url: formData.poster_url,
-      status: 'tentative',
       created_by: userId,
     })
     .select()
@@ -236,26 +237,6 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
   }
 
   return getEventById(id);
-}
-
-export async function updateEventStatus(
-  id: string,
-  status: string,
-  notifyUserId?: string,
-  notifyTitle?: string,
-  notifyBody?: string
-): Promise<void> {
-  const { error } = await supabase.from('events').update({ status }).eq('id', id);
-  if (error) throw error;
-
-  if (notifyUserId && notifyTitle && notifyBody) {
-    await supabase.from('notifications').insert({
-      user_id: notifyUserId,
-      title: notifyTitle,
-      body: notifyBody,
-      event_id: id,
-    });
-  }
 }
 
 export async function deleteEvent(id: string): Promise<void> {

@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.reyuvel.goappchurch",
+      "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "backgroundColor": "#1A56DB"
       },
