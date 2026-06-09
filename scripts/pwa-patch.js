@@ -17,6 +17,15 @@ if (!fs.existsSync(indexPath)) {
 
 let html = fs.readFileSync(indexPath, 'utf8');
 
+// Stamp the service worker with a build timestamp so browsers re-install it on every deploy
+const swPath = path.join(__dirname, '..', 'dist', 'sw.js');
+if (fs.existsSync(swPath)) {
+  let sw = fs.readFileSync(swPath, 'utf8');
+  sw = sw.replace(/const CACHE = '[^']*'/, `const CACHE = 'gracelink-${Date.now()}'`);
+  fs.writeFileSync(swPath, sw);
+  console.log('✓ Service worker cache version stamped');
+}
+
 const pwaTags = `
     <!-- PWA -->
     <meta name="theme-color" content="#7B2FF7" />
