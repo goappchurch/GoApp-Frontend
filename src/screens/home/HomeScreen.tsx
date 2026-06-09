@@ -443,7 +443,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#2a0dcd' },
+  safe: { flex: 1, backgroundColor: colors.background },
 
   scrollContent: { paddingBottom: 100 },
 

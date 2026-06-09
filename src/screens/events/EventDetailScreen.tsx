@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Alert,
   ActivityIndicator,
   Linking,
@@ -100,13 +101,23 @@ export default function EventDetailScreen() {
       ),
       headerTintColor: '#fff',
       headerRight: isAssistant && event ? () => (
-        <TouchableOpacity
+        <Pressable
           onPress={() => navigation.navigate('AddEditEvent', { eventId: event.id })}
-          style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 13, width: 38, height: 38, justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)' }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.2)',
+            borderRadius: 14,
+            width: 44,
+            height: 44,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 6,
+            borderWidth: 1.5,
+            borderColor: 'rgba(255,255,255,0.35)',
+          })}
+          hitSlop={12}
         >
           <Ionicons name="create-outline" size={20} color="#fff" />
-        </TouchableOpacity>
+        </Pressable>
       ) : undefined,
     });
   }, [navigation, event, isAssistant]);
@@ -752,7 +763,14 @@ function Section({
           <LinearGradient colors={iconGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={edc.iconCircle}>
             <Ionicons name={icon} size={15} color="#fff" />
           </LinearGradient>
-          <Text style={edc.title}>{title}</Text>
+          <LinearGradient
+            colors={iconGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={edc.titlePill}
+          >
+            <Text style={edc.titlePillText}>{title}</Text>
+          </LinearGradient>
           <Text style={{ fontSize: 20 }}>{emoji}</Text>
         </View>
         <View style={edc.innerBox}>{children}</View>
@@ -791,7 +809,14 @@ function EventDetailsCard({
           <LinearGradient colors={['#7B2FF7', '#5D0EFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={edc.iconCircle}>
             <Ionicons name="calendar-outline" size={15} color="#fff" />
           </LinearGradient>
-          <Text style={edc.title}>Event & Details</Text>
+          <LinearGradient
+            colors={['#7B2FF7', '#5D0EFF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={edc.titlePill}
+          >
+            <Text style={edc.titlePillText}>Event & Details</Text>
+          </LinearGradient>
           <EventDateBadge iso={dateStart} />
         </View>
 
@@ -860,19 +885,24 @@ const edc = StyleSheet.create({
     shadowColor: '#7B2FF7', shadowOpacity: 0.28, shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 }, elevation: 4,
   },
-  title: { fontSize: 13, fontWeight: '700', color: '#111827', flex: 1 },
+  title: { fontSize: 14, fontWeight: '800', color: '#111827', flex: 1 },
+  titlePill: {
+    flex: 1, borderRadius: 18,
+    paddingHorizontal: 10, paddingVertical: 12,
+  },
+  titlePillText: { fontSize: 13, fontWeight: '800', color: '#fff', letterSpacing: 0.1 },
   innerBox: {
     backgroundColor: 'rgba(255,255,255,0.82)',
     borderRadius: 14, padding: 12,
     shadowColor: '#e88484', shadowOpacity: 0.05, shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
-  colsRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
-  col: { flex: 1, gap: 2 },
-  colLabel: { fontSize: 10, fontWeight: '500', color: '#9CA3AF', lineHeight: 14 },
-  colDate: { fontSize: 12, fontWeight: '700', color: '#111827', lineHeight: 17 },
-  colTime: { fontSize: 11, fontWeight: '600', color: '#6B7280', marginTop: 1 },
-  vDivider: { width: 1, height: 36, backgroundColor: '#E5E7EB', marginHorizontal: 10 },
+  colsRow: { flexDirection: 'row', alignItems: 'center', minHeight: 60 },
+  col: { flex: 1, gap: 3 },
+  colLabel: { fontSize: 10, fontWeight: '700', color: '#9CA3AF', lineHeight: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
+  colDate: { fontSize: 15, fontWeight: '800', color: '#111827', lineHeight: 20, letterSpacing: -0.3 },
+  colTime: { fontSize: 13, fontWeight: '700', color: '#7B2FF7', marginTop: 1 },
+  vDivider: { width: 1, height: 46, backgroundColor: '#E5E7EB', marginHorizontal: 12 },
   topicRow: {
     marginTop: 10, paddingTop: 10,
     borderTopWidth: 1, borderTopColor: 'rgba(229,231,235,0.8)',
@@ -899,7 +929,7 @@ const edb = StyleSheet.create({
   },
   top: { alignItems: 'center', paddingVertical: 3 },
   month: { color: '#fff', fontSize: 7, fontWeight: '800', letterSpacing: 1.0 },
-  day: { fontSize: 18, fontWeight: '800', color: '#111827', textAlign: 'center', paddingVertical: 4 },
+  day: { fontSize: 20, fontWeight: '900', color: '#111827', textAlign: 'center', paddingVertical: 4 },
 });
 
 // ── Premium flight card ──
@@ -1010,16 +1040,16 @@ const fc = StyleSheet.create({
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerRow: { gap: 4 },
   headerRoute: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerFrom: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
-  headerTo: { fontSize: 15, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  headerFrom: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  headerTo: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statusText: { color: 'rgba(255,255,255,0.92)', fontSize: 11, fontWeight: '700' },
   flightNum: { color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: -0.2 },
   body: { backgroundColor: '#fff', padding: 12, gap: 10 },
   route: { flexDirection: 'row', alignItems: 'center' },
   airport: { flex: 1, alignItems: 'flex-start' },
-  code: { fontSize: 18, fontWeight: '900', color: '#111827', letterSpacing: -0.5 },
-  codeLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 1 },
+  code: { fontSize: 19, fontWeight: '900', color: '#111827', letterSpacing: -0.5 },
+  codeLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 },
   routeMid: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'center', gap: 4, paddingHorizontal: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#DDD6FE' },
   dash: { flex: 1, height: 1.5, backgroundColor: '#DDD6FE' },
@@ -1028,7 +1058,7 @@ const fc = StyleSheet.create({
   timeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   timeIconWrap: { width: 16, height: 16, borderRadius: 5, justifyContent: 'center', alignItems: 'center' },
   timeLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
-  timeValue: { fontSize: 11, color: '#111827', fontWeight: '700' },
+  timeValue: { fontSize: 13, color: '#111827', fontWeight: '800' },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   pdfText: { fontWeight: '600', fontSize: 13 },
 });
@@ -1296,9 +1326,9 @@ const inf = StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
   label: {
     fontSize: 10, fontWeight: '700', color: '#94A3B8',
-    textTransform: 'uppercase', letterSpacing: 1.0, marginBottom: 3,
+    textTransform: 'uppercase', letterSpacing: 1.0, marginBottom: 4,
   },
-  value: { fontSize: 13, color: '#111827', fontWeight: '700', lineHeight: 18 },
+  value: { fontSize: 14, color: '#111827', fontWeight: '700', lineHeight: 20 },
 });
 
 const noteInputStyle = StyleSheet.create({

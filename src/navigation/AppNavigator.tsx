@@ -18,6 +18,7 @@ import FlightsScreen from '../screens/flights/FlightsScreen';
 import SettingsScreen from '../screens/settings/SettingsScreen';
 import EventDetailScreen from '../screens/events/EventDetailScreen';
 import AddEditEventScreen from '../screens/events/AddEditEventScreen';
+import EventsListScreen from '../screens/events/EventsListScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import ContactDetailScreen from '../screens/contacts/ContactDetailScreen';
 
@@ -28,6 +29,7 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Calendar: undefined;
+  Events: undefined;
   Flights: undefined;
   Settings: undefined;
 };
@@ -80,6 +82,7 @@ function MainNavigator() {
           const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
             Home: focused ? 'home' : 'home-outline',
             Calendar: focused ? 'calendar' : 'calendar-outline',
+            Events: focused ? 'list' : 'list-outline',
             Flights: focused ? 'airplane' : 'airplane-outline',
           };
           return <Ionicons name={icons[route.name] ?? 'help'} size={size} color={color} />;
@@ -103,6 +106,7 @@ function MainNavigator() {
     >
       <MainTab.Screen name="Home" component={HomeScreen} />
       <MainTab.Screen name="Calendar" component={CalendarScreen} />
+      <MainTab.Screen name="Events" component={EventsListScreen} />
       <MainTab.Screen name="Flights" component={FlightsScreen} />
       <MainTab.Screen name="Settings" component={SettingsScreen} />
     </MainTab.Navigator>

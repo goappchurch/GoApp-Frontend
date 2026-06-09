@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Modal, ScrollView, Dimensions, Animated, TextInput,
+  KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,11 +16,13 @@ const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 const QUICK_TIMES = [
-  { label: '9:00 AM',  h: 9,  m: 0 },
-  { label: '12:00 PM', h: 12, m: 0 },
-  { label: '3:00 PM',  h: 15, m: 0 },
-  { label: '6:00 PM',  h: 18, m: 0 },
+  { label: '9 AM',  h: 9,  m: 0 },
+  { label: '10 AM', h: 10, m: 0 },
+  { label: '12 PM', h: 12, m: 0 },
+  { label: '3 PM',  h: 15, m: 0 },
+  { label: '6 PM',  h: 18, m: 0 },
 ];
+
 
 function buildGrid(year: number, month: number): (number | null)[][] {
   const firstDay = new Date(year, month, 1).getDay();
@@ -37,13 +40,6 @@ function buildGrid(year: number, month: number): (number | null)[][] {
   return rows;
 }
 
-function nextWeekend(): Date {
-  const d = new Date();
-  const day = d.getDay();
-  const daysUntilSat = (6 - day + 7) % 7 || 7;
-  d.setDate(d.getDate() + daysUntilSat);
-  return d;
-}
 
 interface Props {
   label?: string;
@@ -75,16 +71,16 @@ export default function DateField({
   const [selDay, setSelDay] = useState<number | null>(() => value ? parseDate().getDate() : null);
   const [hour24, setHour24] = useState(() => parseDate().getHours());
   const [minute, setMinute] = useState(() => parseDate().getMinutes());
-  const [customTime, setCustomTime] = useState(false);
+  const [showTimeModal, setShowTimeModal] = useState(false);
   const [hourText, setHourText] = useState('12');
   const [minText, setMinText] = useState('00');
+  const [kbHeight, setKbHeight] = useState(0);
 
   useEffect(() => {
-    if (customTime) {
-      setHourText(String(hour24 % 12 || 12));
-      setMinText(String(minute).padStart(2, '0'));
-    }
-  }, [customTime]);
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKbHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   // Animated values
   const confirmAnim = useRef(new Animated.Value(0)).current;
@@ -121,14 +117,6 @@ export default function DateField({
     setViewMonth(d.getMonth());
   };
 
-  const applyDate = (d: Date) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelYear(d.getFullYear());
-    setSelMonth(d.getMonth());
-    setSelDay(d.getDate());
-    setViewYear(d.getFullYear());
-    setViewMonth(d.getMonth());
-  };
 
   const open = () => {
     const d = parseDate();
@@ -139,7 +127,9 @@ export default function DateField({
     setSelDay(value ? d.getDate() : null);
     setHour24(d.getHours());
     setMinute(d.getMinutes());
-    setCustomTime(false);
+    setHourText(String(d.getHours() % 12 || 12));
+    setMinText(String(d.getMinutes()).padStart(2, '0'));
+    setShowTimeModal(false);
     setShow(true);
   };
 
@@ -166,18 +156,6 @@ export default function DateField({
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
 
-  // Preview text
-  const previewDate = (selYear !== null && selMonth !== null && selDay !== null)
-    ? new Date(selYear, selMonth, selDay)
-    : null;
-  const previewDateStr = previewDate
-    ? previewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-    : null;
-  const previewTimeStr = mode === 'datetime'
-    ? new Date(2000, 0, 1, hour24, minute).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-    : null;
-
-  const displayHour = hour24 % 12 || 12;
   const displayAmpm = hour24 >= 12 ? 'PM' : 'AM';
 
   return (
@@ -216,6 +194,7 @@ export default function DateField({
         <View style={styles.backdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setShow(false)} />
 
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.sheet}>
             <View style={styles.handle} />
 
@@ -237,54 +216,8 @@ export default function DateField({
               </TouchableOpacity>
             </View>
 
-            {/* Selected Date Preview */}
-            <Animated.View style={[
-              styles.preview,
-              {
-                opacity: previewAnim,
-                transform: [{ translateY: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
-              },
-            ]}>
-              <LinearGradient
-                colors={[accentColor + '18', accentColor + '08'] as [string, string]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={styles.previewInner}
-              >
-                <Ionicons name="calendar" size={14} color={accentColor} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.previewDate, { color: accentColor }]}>{previewDateStr ?? '—'}</Text>
-                  {previewTimeStr && <Text style={styles.previewTime}>{previewTimeStr}</Text>}
-                </View>
-              </LinearGradient>
-            </Animated.View>
-
-            {/* ── Calendar view (no custom time) ── */}
-            {!customTime && (
-              <ScrollView ref={scrollRef} bounces={false} showsVerticalScrollIndicator={false}>
-
-                {/* Quick select chips */}
-                <View style={styles.quickRow}>
-                  {[
-                    { label: 'Today', date: new Date() },
-                    { label: 'Tomorrow', date: new Date(Date.now() + 86400000) },
-                    { label: 'Next Weekend', date: nextWeekend() },
-                  ].map(({ label: lbl, date }) => {
-                    const isActive =
-                      selDay === date.getDate() &&
-                      selMonth === date.getMonth() &&
-                      selYear === date.getFullYear();
-                    return (
-                      <TouchableOpacity
-                        key={lbl}
-                        onPress={() => applyDate(date)}
-                        activeOpacity={0.75}
-                        style={[styles.quickChip, isActive && { backgroundColor: accentColor, borderColor: accentColor }]}
-                      >
-                        <Text style={[styles.quickChipText, isActive && { color: '#fff', fontWeight: '700' }]}>{lbl}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+            {/* ── Calendar ── */}
+            <ScrollView ref={scrollRef} bounces={false} showsVerticalScrollIndicator={false}>
 
                 {/* Month navigation */}
                 <View style={styles.monthNav}>
@@ -364,135 +297,39 @@ export default function DateField({
                   ))}
                 </View>
 
-                {/* Quick time chips */}
-                {mode === 'datetime' && (
-                  <View style={styles.timeSection}>
-                    <Text style={styles.timeSectionLabel}>Time</Text>
-                    <View style={styles.timeChipRow}>
-                      {QUICK_TIMES.map(({ label: lbl, h, m }) => {
-                        const active = hour24 === h && minute === m;
-                        return (
-                          <TouchableOpacity
-                            key={lbl}
-                            onPress={() => { Haptics.selectionAsync(); setHour24(h); setMinute(m); }}
-                            style={[styles.timeChip, active && { backgroundColor: accentColor, borderColor: accentColor }]}
-                            activeOpacity={0.75}
-                          >
-                            <Text style={[styles.timeChipText, active && { color: '#fff', fontWeight: '700' }]}>{lbl}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                <View style={{ height: 8 }} />
+              </ScrollView>
+
+            {/* ── Time chips ── */}
+            {mode === 'datetime' && (
+              <View style={styles.timeSection}>
+                <Text style={styles.timeSectionLabel}>Time</Text>
+                <View style={styles.timeChipRow}>
+                  {QUICK_TIMES.map(({ label: lbl, h, m }) => {
+                    const active = hour24 === h && minute === m;
+                    return (
                       <TouchableOpacity
-                        onPress={() => setCustomTime(true)}
-                        style={styles.timeChip}
+                        key={lbl}
+                        onPress={() => { Haptics.selectionAsync(); setHour24(h); setMinute(m); }}
+                        style={[styles.timeChip, active && { backgroundColor: accentColor, borderColor: accentColor }]}
                         activeOpacity={0.75}
                       >
-                        <Ionicons name="time-outline" size={13} color="#64748B" />
-                        <Text style={styles.timeChipText}>Custom</Text>
+                        <Text style={[styles.timeChipText, active && { color: '#fff', fontWeight: '700' }]}>{lbl}</Text>
                       </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-
-                <View style={{ height: 20 }} />
-              </ScrollView>
-            )}
-
-            {/* ── Custom time input (replaces calendar) ── */}
-            {customTime && mode === 'datetime' && (
-              <View style={styles.timeWheelPane}>
-                <TouchableOpacity onPress={() => setCustomTime(false)} style={styles.backToQuick}>
-                  <Ionicons name="chevron-back" size={13} color={accentColor} />
-                  <Text style={[styles.backToQuickText, { color: accentColor }]}>Back to calendar</Text>
-                </TouchableOpacity>
-
-                {/* Live preview */}
-                <View style={styles.timeLivePreview}>
-                  <Text style={[styles.timeLiveH, { color: accentColor }]}>
-                    {String(displayHour).padStart(2, '0')}
-                  </Text>
-                  <Text style={styles.timeLiveColon}>:</Text>
-                  <Text style={[styles.timeLiveH, { color: accentColor }]}>
-                    {String(minute).padStart(2, '0')}
-                  </Text>
-                  <View style={[styles.timeLiveAmpm, { backgroundColor: accentColor + '22', borderColor: accentColor + '55' }]}>
-                    <Text style={[styles.timeLiveAmpmText, { color: accentColor }]}>{displayAmpm}</Text>
-                  </View>
-                </View>
-
-                {/* Type-in inputs */}
-                <View style={styles.timeInputRow}>
-                  {/* Hour */}
-                  <View style={styles.timeInputBlock}>
-                    <Text style={styles.timeInputLabel}>Hour</Text>
-                    <TextInput
-                      style={[styles.timeInputField, { borderColor: accentColor + '66', color: accentColor }]}
-                      value={hourText}
-                      onChangeText={(t) => {
-                        const clean = t.replace(/[^0-9]/g, '').slice(0, 2);
-                        setHourText(clean);
-                        const n = parseInt(clean);
-                        if (!isNaN(n) && n >= 1 && n <= 12) {
-                          setHour24(displayAmpm === 'PM' ? (n === 12 ? 12 : n + 12) : (n === 12 ? 0 : n));
-                        }
-                      }}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      selectTextOnFocus
-                      textAlign="center"
-                      placeholder="12"
-                      placeholderTextColor="#CBD5E1"
-                    />
-                  </View>
-
-                  <Text style={[styles.timeInputSep, { color: accentColor }]}>:</Text>
-
-                  {/* Minute */}
-                  <View style={styles.timeInputBlock}>
-                    <Text style={styles.timeInputLabel}>Minute</Text>
-                    <TextInput
-                      style={[styles.timeInputField, { borderColor: accentColor + '66', color: accentColor }]}
-                      value={minText}
-                      onChangeText={(t) => {
-                        const clean = t.replace(/[^0-9]/g, '').slice(0, 2);
-                        setMinText(clean);
-                        const n = parseInt(clean);
-                        if (!isNaN(n) && n >= 0 && n <= 59) {
-                          setMinute(n);
-                        }
-                      }}
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      selectTextOnFocus
-                      textAlign="center"
-                      placeholder="00"
-                      placeholderTextColor="#CBD5E1"
-                    />
-                  </View>
-
-                  {/* AM / PM */}
-                  <View style={styles.timeInputBlock}>
-                    <Text style={styles.timeInputLabel}>Period</Text>
-                    <View style={styles.ampmGroup}>
-                      {(['AM', 'PM'] as const).map((p) => (
-                        <TouchableOpacity
-                          key={p}
-                          onPress={() => {
-                            Haptics.selectionAsync();
-                            if (p === 'AM' && hour24 >= 12) setHour24(hour24 - 12);
-                            if (p === 'PM' && hour24 < 12) setHour24(hour24 + 12);
-                          }}
-                          activeOpacity={0.75}
-                          style={[
-                            styles.ampmBtn,
-                            displayAmpm === p && { backgroundColor: accentColor, borderColor: accentColor },
-                          ]}
-                        >
-                          <Text style={[styles.ampmBtnText, displayAmpm === p && { color: '#fff' }]}>{p}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
+                    );
+                  })}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setHourText(String(hour24 % 12 || 12));
+                      setMinText(String(minute).padStart(2, '0'));
+                      setShowTimeModal(true);
+                    }}
+                    style={styles.timeChip}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="time-outline" size={13} color="#64748B" />
+                    <Text style={styles.timeChipText}>Custom</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             )}
@@ -517,6 +354,93 @@ export default function DateField({
               </TouchableOpacity>
             </Animated.View>
           </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* ── Custom time modal ── */}
+      <Modal transparent animationType="slide" visible={showTimeModal} onRequestClose={() => setShowTimeModal(false)} statusBarTranslucent>
+        <View style={styles.backdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setShowTimeModal(false)} />
+            <View style={[styles.timeSheet, { marginBottom: kbHeight }]}>
+              <View style={styles.handle} />
+              <View style={styles.header}>
+                <TouchableOpacity onPress={() => setShowTimeModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Set Time</Text>
+                <TouchableOpacity onPress={() => setShowTimeModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={[styles.doneText, { color: accentColor }]}>Done</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.timeModalBody}>
+                <View style={styles.timeInputRow}>
+                  <View style={styles.timeInputBlock}>
+                    <Text style={styles.timeInputLabel}>Hour</Text>
+                    <TextInput
+                      style={[styles.timeInputField, { borderColor: accentColor + '66', color: accentColor }]}
+                      value={hourText}
+                      onChangeText={(t) => {
+                        const clean = t.replace(/[^0-9]/g, '').slice(0, 2);
+                        setHourText(clean);
+                        const n = parseInt(clean);
+                        if (!isNaN(n) && n >= 1 && n <= 12) {
+                          setHour24(displayAmpm === 'PM' ? (n === 12 ? 12 : n + 12) : (n === 12 ? 0 : n));
+                        }
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      selectTextOnFocus
+                      textAlign="center"
+                      placeholder="12"
+                      placeholderTextColor="#CBD5E1"
+                    />
+                  </View>
+                  <Text style={[styles.timeInputSep, { color: accentColor }]}>:</Text>
+                  <View style={styles.timeInputBlock}>
+                    <Text style={styles.timeInputLabel}>Minute</Text>
+                    <TextInput
+                      style={[styles.timeInputField, { borderColor: accentColor + '66', color: accentColor }]}
+                      value={minText}
+                      onChangeText={(t) => {
+                        const clean = t.replace(/[^0-9]/g, '').slice(0, 2);
+                        setMinText(clean);
+                        const n = parseInt(clean);
+                        if (!isNaN(n) && n >= 0 && n <= 59) {
+                          setMinute(n);
+                        }
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      selectTextOnFocus
+                      textAlign="center"
+                      placeholder="00"
+                      placeholderTextColor="#CBD5E1"
+                    />
+                  </View>
+                  <View style={styles.timeInputBlock}>
+                    <Text style={styles.timeInputLabel}>Period</Text>
+                    <View style={styles.ampmGroup}>
+                      {(['AM', 'PM'] as const).map((p) => (
+                        <TouchableOpacity
+                          key={p}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            if (p === 'AM' && hour24 >= 12) setHour24(hour24 - 12);
+                            if (p === 'PM' && hour24 < 12) setHour24(hour24 + 12);
+                          }}
+                          activeOpacity={0.75}
+                          style={[styles.ampmBtn, displayAmpm === p && { backgroundColor: accentColor, borderColor: accentColor }]}
+                        >
+                          <Text style={[styles.ampmBtnText, displayAmpm === p && { color: '#fff' }]}>{p}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
         </View>
       </Modal>
     </View>
@@ -547,7 +471,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFBFF',
     borderTopLeftRadius: 32, borderTopRightRadius: 32,
     paddingBottom: 40,
-    height: SCREEN_H * 0.78,
+    height: SCREEN_H * 0.84,
+  },
+  timeSheet: {
+    backgroundColor: '#FAFBFF',
+    borderTopLeftRadius: 32, borderTopRightRadius: 32,
+    paddingBottom: 40,
+  },
+  timeModalBody: {
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24,
+    alignItems: 'center',
   },
   handle: {
     width: 44, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1',
@@ -574,13 +507,6 @@ const styles = StyleSheet.create({
   previewTime: { fontSize: 12, color: '#64748B', fontWeight: '500', marginTop: 1 },
 
   // Quick chips
-  quickRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
-  quickChip: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 50, borderWidth: 1.5, borderColor: '#E2E8F0',
-    backgroundColor: '#fff',
-  },
-  quickChipText: { fontSize: 13, fontWeight: '600', color: '#475569' },
 
   // Month nav
   monthNav: {
@@ -620,7 +546,7 @@ const styles = StyleSheet.create({
   daySelText: { fontSize: 15, fontWeight: '800', color: '#fff' },
 
   // Time section
-  timeSection: { paddingHorizontal: 20, paddingTop: 18 },
+  timeSection: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
   timeSectionLabel: {
     fontSize: 11, fontWeight: '700', color: '#94A3B8',
     letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 10,
@@ -633,51 +559,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   timeChipText: { fontSize: 13, fontWeight: '600', color: '#475569' },
-  backToQuick: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4,
-  },
-  backToQuickText: { fontSize: 13, fontWeight: '600' },
-  // Live preview above wheels
-  timeLivePreview: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 4, paddingVertical: 12,
-  },
-  timeLiveH: { fontSize: 52, fontWeight: '800', letterSpacing: -2 },
-  timeLiveColon: { fontSize: 44, fontWeight: '800', color: '#94A3B8', marginBottom: 6 },
-  timeLiveAmpm: {
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
-    borderWidth: 1.5, marginLeft: 6, alignSelf: 'center',
-  },
-  timeLiveAmpmText: { fontSize: 16, fontWeight: '800' },
+  backToChips: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
+  backToChipsText: { fontSize: 13, fontWeight: '600' },
 
-  // Time wheel full pane (replaces calendar)
-  timeWheelPane: {
-    flex: 1, paddingHorizontal: 20,
-    justifyContent: 'center', gap: 8,
-  },
-
-  // Time type-in inputs
+  // Time inputs
   timeInputRow: {
     flexDirection: 'row', alignItems: 'flex-end',
-    justifyContent: 'center', gap: 12, marginTop: 8,
+    justifyContent: 'center', gap: 10,
   },
-  timeInputBlock: { alignItems: 'center', gap: 6 },
-  timeInputLabel: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 1, textTransform: 'uppercase' },
+  timeInputBlock: { alignItems: 'center', gap: 5 },
+  timeInputLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 1, textTransform: 'uppercase' },
   timeInputField: {
-    width: 80, height: 72,
-    borderRadius: 16, borderWidth: 2,
+    width: 64, height: 52,
+    borderRadius: 14, borderWidth: 2,
     backgroundColor: '#F8F5FF',
-    fontSize: 32, fontWeight: '800',
+    fontSize: 24, fontWeight: '800',
     textAlign: 'center',
   },
-  timeInputSep: { fontSize: 36, fontWeight: '900', marginBottom: 10 },
-  ampmGroup: { gap: 8 },
+  timeInputSep: { fontSize: 28, fontWeight: '900', marginBottom: 8 },
+  ampmGroup: { gap: 6 },
   ampmBtn: {
-    width: 60, paddingVertical: 10, borderRadius: 12,
+    width: 50, paddingVertical: 7, borderRadius: 10,
     borderWidth: 2, borderColor: '#E2E8F0',
     backgroundColor: '#fff', alignItems: 'center',
   },
-  ampmBtnText: { fontSize: 14, fontWeight: '700', color: '#64748B' },
+  ampmBtnText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
 
   // Confirm
   confirmWrap: { paddingHorizontal: 20, paddingTop: 8 },
