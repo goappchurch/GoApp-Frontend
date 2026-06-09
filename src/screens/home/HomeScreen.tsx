@@ -143,7 +143,7 @@ export default function HomeScreen() {
           {/* App bar */}
           <View style={styles.appBar}>
             <View>
-              <Text style={styles.appName}>GoAppChurch</Text>
+              <Text style={styles.appName}>GraceLink</Text>
               <Text style={styles.greeting}>{getGreeting()}, {firstName}</Text>
             </View>
             <View style={styles.appBarRight}>
