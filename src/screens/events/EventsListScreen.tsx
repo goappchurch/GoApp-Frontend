@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9f9f9',
     borderRadius: radius.lg,
     paddingHorizontal: 14,
-    paddingVertical: 1,
+    paddingVertical: 10,
   },
   heroSearchInput: {
     flex: 1,

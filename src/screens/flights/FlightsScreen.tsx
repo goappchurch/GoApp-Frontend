@@ -642,9 +642,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: radius.lg,
     paddingHorizontal: 14,
-    paddingVertical: 4,
+    paddingVertical: 10,
   },
-  searchInput: { flex: 1, fontSize: 14, color: colors.textPrimary },
+  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
 
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { color: colors.textSecondary, fontSize: 14 },
