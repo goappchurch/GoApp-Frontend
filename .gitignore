@@ -103,3 +103,5 @@ yarn-error.log*
 # Temporary folders
 tmp/
 temp/
+# Web build output
+dist/
