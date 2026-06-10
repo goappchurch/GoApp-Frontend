@@ -1,4 +1,4 @@
-export type UserRole = 'boss' | 'assistant';
+export type UserRole = 'boss' | 'assistant' | 'viewer';
 
 export type EventType =
   | 'sunday_service'

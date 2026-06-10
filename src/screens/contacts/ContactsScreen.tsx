@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getContacts } from '../../services/contacts';
 import { Contact } from '../../types';
 import { colors, shadow, radius } from '../../constants/theme';
+import { getLoadingVerse } from '../../constants/verses';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -146,7 +147,7 @@ export default function ContactsScreen() {
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading contacts…</Text>
+          <Text style={styles.loadingText}>{getLoadingVerse()}</Text>
         </View>
       ) : (
         <SectionList

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import {
   Event,
@@ -257,21 +258,30 @@ export async function deleteEvent(id: string): Promise<void> {
 }
 
 export async function uploadEventPoster(localUri: string, eventId: string): Promise<string> {
+  const basePath = `${eventId}/poster-${Date.now()}`;
+
+  if (Platform.OS === 'web') {
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    const mimeType = blob.type || 'image/jpeg';
+    const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') ?? 'jpg';
+    const path = `${basePath}.${ext}`;
+    const { data, error } = await supabase.storage
+      .from('event-posters')
+      .upload(path, blob, { upsert: true, contentType: mimeType });
+    if (error) throw new Error(error.message);
+    const { data: { publicUrl } } = supabase.storage.from('event-posters').getPublicUrl(data.path);
+    return publicUrl;
+  }
+
   const ext = (localUri.split('.').pop() ?? 'jpg').toLowerCase().replace(/\?.*/, '');
   const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
-  const path = `${eventId}/poster-${Date.now()}.${ext}`;
-
+  const path = `${basePath}.${ext}`;
   const formData = new FormData();
-  formData.append('file', {
-    uri: localUri,
-    name: `poster.${ext}`,
-    type: mimeType,
-  } as any);
-
+  formData.append('file', { uri: localUri, name: `poster.${ext}`, type: mimeType } as any);
   const { data, error } = await supabase.storage
     .from('event-posters')
     .upload(path, formData as any, { upsert: true });
-
   if (error) throw new Error(error.message);
   const { data: { publicUrl } } = supabase.storage.from('event-posters').getPublicUrl(data.path);
   return publicUrl;
@@ -279,12 +289,20 @@ export async function uploadEventPoster(localUri: string, eventId: string): Prom
 
 export async function uploadTicketPdf(localUri: string, eventId: string, prefix = 'ticket'): Promise<string> {
   const path = `${eventId}/${prefix}-${Date.now()}.pdf`;
+
+  if (Platform.OS === 'web') {
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    const { data, error } = await supabase.storage
+      .from('event-tickets')
+      .upload(path, blob, { upsert: true, contentType: 'application/pdf' });
+    if (error) throw new Error(error.message);
+    const { data: { publicUrl } } = supabase.storage.from('event-tickets').getPublicUrl(data.path);
+    return publicUrl;
+  }
+
   const formData = new FormData();
-  formData.append('file', {
-    uri: localUri,
-    name: 'ticket.pdf',
-    type: 'application/pdf',
-  } as any);
+  formData.append('file', { uri: localUri, name: 'ticket.pdf', type: 'application/pdf' } as any);
   const { data, error } = await supabase.storage
     .from('event-tickets')
     .upload(path, formData as any, { upsert: true });
