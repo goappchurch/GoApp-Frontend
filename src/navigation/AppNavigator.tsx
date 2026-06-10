@@ -101,6 +101,7 @@ function MainNavigator() {
           paddingTop: 6,
           backgroundColor: '#fff',
         },
+        tabBarSafeAreaInsets: { bottom: 0 },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',

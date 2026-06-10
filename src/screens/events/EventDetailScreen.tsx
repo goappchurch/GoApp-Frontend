@@ -12,6 +12,7 @@ import {
   Animated,
   TextInput,
   Modal,
+  Platform,
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -147,24 +148,34 @@ export default function EventDetailScreen() {
     }
   }, [loading, event]);
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Event',
-      `Are you sure you want to delete "${event?.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive', onPress: async () => {
-            try {
-              await deleteEvent(event!.id);
-              navigation.goBack();
-            } catch (e: any) {
-              Alert.alert('Error', e?.message ?? 'Could not delete event');
-            }
-          }
-        },
-      ]
-    );
+  const handleDelete = async () => {
+    const doDelete = async () => {
+      try {
+        await deleteEvent(event!.id);
+        navigation.goBack();
+      } catch (e: any) {
+        if (Platform.OS === 'web') {
+          window.alert(e?.message ?? 'Could not delete event');
+        } else {
+          Alert.alert('Error', e?.message ?? 'Could not delete event');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete "${event?.title}"? This cannot be undone.`)) {
+        await doDelete();
+      }
+    } else {
+      Alert.alert(
+        'Delete Event',
+        `Are you sure you want to delete "${event?.title}"? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: doDelete },
+        ]
+      );
+    }
   };
 
   const handleAddNote = async () => {
