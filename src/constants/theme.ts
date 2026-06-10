@@ -1,15 +1,22 @@
 export const colors = {
-  primary: '#1A56DB',
-  primaryDark: '#1345B8',
-  primaryLight: '#EFF6FF',
-  primaryMid: '#DBEAFE',
+  // ── Brand: Deep Indigo (single hue across the whole app) ──
+  primary: '#4F46E5',       // indigo-600  — primary actions, active states
+  primaryDark: '#4338CA',   // indigo-700
+  primaryDarker: '#3730A3', // indigo-800  — header gradient top
+  primaryLight: '#EEF2FF',  // indigo-50   — tinted surfaces
+  primaryMid: '#E0E7FF',    // indigo-100
+  accent: '#6366F1',        // indigo-500  — accents / "today"
+
+  // ── Semantic status (functional cues only, used sparingly) ──
   success: '#16A34A',
   successLight: '#DCFCE7',
   danger: '#DC2626',
   dangerLight: '#FEE2E2',
   warning: '#D97706',
   warningLight: '#FEF3C7',
-  background: '#F5F7FA',
+
+  // ── Neutrals ──
+  background: '#F8FAFC',
   card: '#FFFFFF',
   textPrimary: '#0F172A',
   textSecondary: '#64748B',
@@ -18,12 +25,21 @@ export const colors = {
   inactive: '#CBD5E1',
 };
 
+// ── Unified gradient tokens ──
+// Rule: only 2 (occasionally 3) monochromatic indigo stops. Cards stay solid white.
 export const gradients = {
-  primary: ['#1A56DB', '#1345B8'] as const,
-  primarySoft: ['#EFF6FF', '#DBEAFE'] as const,
+  // Headers / hero banners
+  header: ['#3730A3', '#4F46E5'] as const,
+  // Hero that fades down into the page background
+  headerFade: ['#3730A3', '#4F46E5', '#A5B4FC'] as const,
+  // Primary buttons / call-to-action
+  primary: ['#4F46E5', '#4338CA'] as const,
+  // Soft tinted surface (e.g. badges, loading backdrops)
+  primarySoft: ['#EEF2FF', '#E0E7FF'] as const,
+  // Semantic — used only for genuinely meaningful status
   success: ['#16A34A', '#15803D'] as const,
-  warm: ['#1A56DB', '#7C3AED'] as const,
-  card: ['#FFFFFF', '#F8FAFC'] as const,
+  // Cards are solid white now (kept as a token so existing call sites stay valid)
+  card: ['#FFFFFF', '#FFFFFF'] as const,
 };
 
 export const eventTypeLabels: Record<string, string> = {
@@ -51,9 +67,10 @@ export const radius = {
   full: 999,
 };
 
+// Neutral, restrained shadows (no colored glow — keeps the UI calm/professional)
 export const shadow = {
   xs: {
-    shadowColor: '#1A56DB',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 3,
@@ -74,9 +91,9 @@ export const shadow = {
     elevation: 4,
   },
   lg: {
-    shadowColor: '#1A56DB',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 20,
     elevation: 8,
   },

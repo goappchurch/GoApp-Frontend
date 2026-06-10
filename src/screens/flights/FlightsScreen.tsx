@@ -22,7 +22,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { getEvents } from '../../services/events';
 import { Event } from '../../types';
-import { colors, shadow, radius } from '../../constants/theme';
+import { colors, shadow, radius, gradients } from '../../constants/theme';
+import { getLoadingVerse } from '../../constants/verses';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -106,14 +107,13 @@ export default function FlightsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#0C4A6E" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.primaryDarker} />
 
       {/* Gradient header */}
       <LinearGradient
-        colors={['#0C4A6E', '#0369A1', '#0284C7', '#38BDF8'] as const}
-        locations={[0, 0.3, 0.65, 1]}
+        colors={gradients.header}
         start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
+        end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         {/* Title row */}
@@ -152,7 +152,7 @@ export default function FlightsScreen() {
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading trips…</Text>
+          <Text style={styles.loadingText}>{getLoadingVerse()}</Text>
         </View>
       ) : (
         <FlatList
@@ -527,10 +527,19 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
                 <View style={{ flex: 1, height: 1, backgroundColor: '#BBF7D0' }} />
               </View>
 
-              <View style={styles.routeRow}>
-                <Text style={[styles.routeFrom, { color: '#059669' }]} numberOfLines={1}>{returnOrigin}</Text>
-                <Ionicons name="airplane" size={16} color="#059669" style={[styles.routeArrowIcon]} />
-                <Text style={[styles.routeTo, { color: '#059669' }]} numberOfLines={1}>{returnDest}</Text>
+              <View style={styles.returnRouteRow}>
+                <View style={[styles.routeRow, { flex: 1 }]}>
+                  <Text style={[styles.routeFrom, { color: '#059669' }]} numberOfLines={1}>{returnOrigin}</Text>
+                  <Ionicons name="airplane" size={16} color="#059669" style={[styles.routeArrowIcon]} />
+                  <Text style={[styles.routeTo, { color: '#059669' }]} numberOfLines={1}>{returnDest}</Text>
+                </View>
+                {event.travel?.return_departure_time && (
+                  <View style={styles.returnDateBlock}>
+                    <Text style={styles.returnDateDay}>{formatDay(event.travel.return_departure_time)}</Text>
+                    <Text style={styles.returnDateMonth}>{formatMonth(event.travel.return_departure_time)}</Text>
+                    <Text style={styles.returnDateYear}>{formatYear(event.travel.return_departure_time)}</Text>
+                  </View>
+                )}
               </View>
 
               {(event.travel?.return_flight_number || event.travel?.return_airline || retDepTime || retArrTime) && (
@@ -611,7 +620,7 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0C4A6E' },
+  safe: { flex: 1, backgroundColor: colors.primaryDarker },
 
   header: {
     paddingHorizontal: 20,
@@ -746,6 +755,18 @@ const styles = StyleSheet.create({
   dateDurationText: { fontSize: 11, fontWeight: '700', color: '#fff' },
 
   // Return flight tag
+  returnRouteRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  returnDateBlock: {
+    alignItems: 'center',
+    backgroundColor: '#D1FAE5',
+    borderRadius: radius.md,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    minWidth: 44,
+  },
+  returnDateDay: { fontSize: 20, fontWeight: '900', color: '#059669', lineHeight: 22, letterSpacing: -0.5 },
+  returnDateMonth: { fontSize: 9, fontWeight: '800', color: '#059669', letterSpacing: 0.8 },
+  returnDateYear: { fontSize: 8, fontWeight: '600', color: '#34D399', marginTop: 1 },
   returnDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6 },
   returnTag: {
     flexDirection: 'row', alignItems: 'center', gap: 4,

@@ -23,7 +23,8 @@ import { getUpcomingEvents, getNotifications } from '../../services/events';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useRealtimeEvents, useRealtimeNotifications } from '../../hooks/useRealtimeEvents';
 import { Event } from '../../types';
-import { colors, shadow, radius, eventTypeLabels, eventTypeIcons } from '../../constants/theme';
+import { colors, shadow, radius, eventTypeLabels, eventTypeIcons, gradients } from '../../constants/theme';
+import { getLoadingVerse } from '../../constants/verses';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -114,9 +115,10 @@ export default function HomeScreen() {
   const filteredRestEvents = regionFilter
     ? upcomingEvents.filter(e => e.venue?.region === regionFilter).slice(0, 8)
     : restEvents;
-  const todayCount = upcomingEvents.filter(
+  const todayEvents = upcomingEvents.filter(
     (e) => new Date(e.date_start).toDateString() === new Date().toDateString()
-  ).length;
+  );
+  const todayCount = todayEvents.length;
   const firstName = user?.full_name?.split(' ')[0] ?? 'there';
 
   return (
@@ -134,8 +136,8 @@ export default function HomeScreen() {
       >
         {/* ── GRADIENT HERO ── */}
         <LinearGradient
-          colors={['#2D1B8E', '#4C1D95', '#7C3AED', '#C4B5FD', '#EDE9FE', '#F5F3FF', colors.background] as const}
-          locations={[0, 0.25, 0.45, 0.65, 0.82, 0.93, 1]}
+          colors={[colors.primaryDarker, colors.primary, '#A5B4FC', colors.background] as const}
+          locations={[0, 0.4, 0.8, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.hero}
@@ -164,15 +166,29 @@ export default function HomeScreen() {
 
           {/* Stats */}
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
+            <TouchableOpacity
+              style={styles.statCard}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Main', { screen: 'Events' })}
+            >
               <Text style={styles.statNumber}>{upcomingEvents.length}</Text>
               <Text style={styles.statLabel}>Upcoming</Text>
-            </View>
+            </TouchableOpacity>
             <View style={styles.statDivider} />
-            <View style={styles.statCard}>
+            <TouchableOpacity
+              style={styles.statCard}
+              activeOpacity={todayEvents.length > 0 ? 0.7 : 1}
+              onPress={() => {
+                if (todayEvents.length === 1) {
+                  navigation.navigate('EventDetail', { eventId: todayEvents[0].id });
+                } else if (todayEvents.length > 1) {
+                  navigation.navigate('Main', { screen: 'Events', params: { filterToday: true } });
+                }
+              }}
+            >
               <Text style={styles.statNumber}>{todayCount}</Text>
               <Text style={styles.statLabel}>Today</Text>
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Next Event carousel inside hero */}
@@ -195,6 +211,8 @@ export default function HomeScreen() {
                     snapToInterval={CARD_W}
                     snapToAlignment="start"
                     decelerationRate="fast"
+                    // CSS scroll snap for web (PWA/browser) — native ignores these
+                    style={{ scrollSnapType: 'x mandatory' } as any}
                     onMomentumScrollEnd={(e) => {
                       const idx = Math.round(e.nativeEvent.contentOffset.x / CARD_W);
                       if (idx >= heroEvents.length) {
@@ -208,7 +226,7 @@ export default function HomeScreen() {
                     {carouselEvents.map((event, i) => (
                       <TouchableOpacity
                         key={`${event.id}-${i}`}
-                        style={[styles.nextCard, shadow.md, { width: CARD_W }]}
+                        style={[styles.nextCard, shadow.md, { width: CARD_W, scrollSnapAlign: 'start', scrollSnapStop: 'always' } as any]}
                         onPress={() => navigation.navigate('EventDetail', { eventId: event.id })}
                         activeOpacity={0.92}
                       >
@@ -217,7 +235,7 @@ export default function HomeScreen() {
                             <Image source={{ uri: event.poster_url }} style={styles.nextCardImage} resizeMode="cover" />
                           ) : (
                             <LinearGradient
-                              colors={['#1A3FA8', '#0E3A9A']}
+                              colors={gradients.primary}
                               style={styles.nextCardImage}
                               start={{ x: 0, y: 0 }}
                               end={{ x: 1, y: 1 }}
@@ -305,7 +323,7 @@ export default function HomeScreen() {
           {loading ? (
             <View style={styles.loadingWrap}>
               <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.loadingText}>Loading your schedule…</Text>
+              <Text style={styles.loadingText}>{getLoadingVerse()}</Text>
             </View>
           ) : (
             <>
@@ -314,7 +332,7 @@ export default function HomeScreen() {
               {upcomingEvents.length === 0 && (
                 <View style={styles.emptyState}>
                   <View style={styles.emptyIconWrap}>
-                    <Ionicons name="calendar-outline" size={40} color="#7C3AED" />
+                    <Ionicons name="calendar-outline" size={40} color={colors.primary} />
                   </View>
                   <Text style={styles.emptyTitle}>No Events Scheduled</Text>
                   <Text style={styles.emptySubtitle}>
@@ -525,8 +543,8 @@ const styles = StyleSheet.create({
   heroEmptyText: { fontSize: 13, color: 'rgba(255,255,255,0.55)', flex: 1 },
   heroLoadingWrap: { alignItems: 'center', paddingVertical: 20 },
   heroDots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 10 },
-  heroDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(124,58,237,0.25)' },
-  heroDotActive: { width: 16, backgroundColor: '#7C3AED' },
+  heroDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: 'rgba(99,102,241,0.25)' },
+  heroDotActive: { width: 16, backgroundColor: colors.primary },
 
   // ── SHEET ──
   sheet: {
@@ -548,12 +566,12 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#DDD6FE',
+    borderColor: colors.primaryMid,
   },
   emptyTitle: {
     fontSize: 18,

@@ -32,6 +32,7 @@ import { getContacts } from '../../services/contacts';
 import { supabase } from '../../lib/supabase';
 import { EventFormData, Contact } from '../../types';
 import { colors, shadow, radius } from '../../constants/theme';
+import { getLoadingVerse } from '../../constants/verses';
 
 type RouteProps = RouteProp<RootStackParamList, 'AddEditEvent'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -86,6 +87,7 @@ export default function AddEditEventScreen() {
           colors={['#4C1D95', '#6D28D9', '#8B5CF6'] as const}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={{ flex: 1 }}
+          pointerEvents="none"
         />
       ),
       headerTitle: () => (
@@ -137,10 +139,14 @@ export default function AddEditEventScreen() {
   const tabScrollRef = useRef<ScrollView>(null);
   const formScrollRef = useRef<ScrollView>(null);
 
+  const defaultDateIso = route.params?.defaultDate
+    ? new Date(route.params.defaultDate + 'T09:00:00').toISOString()
+    : new Date().toISOString();
+
   const [form, setForm] = useState<EventFormData>({
     title: '',
     event_type: 'sunday_service',
-    date_start: new Date().toISOString(),
+    date_start: defaultDateIso,
     timezone: 'Asia/Kolkata',
     flight_booked: false,
     companions: [],
@@ -232,7 +238,11 @@ export default function AddEditEventScreen() {
   const handlePickPoster = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permission needed', 'Allow photo access to upload a poster'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      quality: 0.9,
+      allowsEditing: true,
+    });
     if (result.canceled || !result.assets[0]) return;
     const uri = result.assets[0].uri;
     setPosterUri(uri);
@@ -297,6 +307,7 @@ export default function AddEditEventScreen() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!form.title.trim()) { Alert.alert('Required', 'Event title is required'); return; }
     if (!user) return;
     if (checkConflict()) {
@@ -387,7 +398,7 @@ export default function AddEditEventScreen() {
     <View style={styles.loadingScreen}>
       <LinearGradient colors={[colors.primaryLight, '#DBEAFE']} style={styles.loadingGrad}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading event…</Text>
+        <Text style={styles.loadingText}>{getLoadingVerse()}</Text>
       </LinearGradient>
     </View>
   );

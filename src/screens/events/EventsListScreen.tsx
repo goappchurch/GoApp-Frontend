@@ -13,15 +13,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, shadow, radius, eventTypeIcons } from '../../constants/theme';
+import { colors, shadow, radius, eventTypeIcons, gradients } from '../../constants/theme';
+import { getLoadingVerse } from '../../constants/verses';
 import { getEvents } from '../../services/events';
 import { Event } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { RootStackParamList } from '../../navigation/AppNavigator';
+import { RootStackParamList, MainTabParamList } from '../../navigation/AppNavigator';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type EventsRoute = RouteProp<MainTabParamList, 'Events'>;
 
 function dateBlock(iso: string) {
   const d = new Date(iso);
@@ -42,6 +44,7 @@ function daysUntil(iso: string): string | null {
 export default function EventsListScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
+  const route = useRoute<EventsRoute>();
   const isAssistant = user?.role === 'assistant';
 
   const [events, setEvents] = useState<Event[]>([]);
@@ -51,6 +54,12 @@ export default function EventsListScreen() {
   const [search, setSearch] = useState('');
   const [timeFilters, setTimeFilters] = useState<string[]>(['upcoming']);
   const [regionFilters, setRegionFilters] = useState<string[]>([]);
+
+  useFocusEffect(useCallback(() => {
+    if (route.params?.filterToday) {
+      setTimeFilters(['today']);
+    }
+  }, [route.params?.filterToday]));
 
   function toggleTime(val: string) {
     setTimeFilters(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
@@ -100,7 +109,9 @@ export default function EventsListScreen() {
       const eventDate = new Date(e.date_start);
       if (timeFilters.length > 0) {
         const isUpcoming = eventDate >= startOfToday;
+        const isToday = eventDate.toDateString() === startOfToday.toDateString();
         const matchesTime =
+          (timeFilters.includes('today') && isToday) ||
           (timeFilters.includes('upcoming') && isUpcoming) ||
           (timeFilters.includes('past') && !isUpcoming);
         if (!matchesTime) return false;
@@ -129,10 +140,9 @@ export default function EventsListScreen() {
     <SafeAreaView style={styles.safe}>
       {/* ── GRADIENT HERO ── */}
       <LinearGradient
-        colors={['#1A3FA8', '#1A56DB', '#2563EB', '#3B82F6'] as const}
-        locations={[0, 0.3, 0.65, 1]}
+        colors={gradients.header}
         start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
+        end={{ x: 1, y: 1 }}
         style={styles.hero}
       >
         {/* Title row */}
@@ -202,6 +212,20 @@ export default function EventsListScreen() {
             </TouchableOpacity>
           ))}
           <TouchableOpacity
+            style={[styles.chip, timeFilters.includes('today') && styles.chipTodayActive]}
+            onPress={() => setTimeFilters(['today'])}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name="today-outline"
+              size={11}
+              color={timeFilters.includes('today') ? '#fff' : colors.textSecondary}
+            />
+            <Text style={[styles.chipText, timeFilters.includes('today') && styles.chipTextActive]}>
+              Today
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.chip, timeFilters.length === 0 && styles.chipActive]}
             onPress={() => setTimeFilters([])}
             activeOpacity={0.75}
@@ -247,14 +271,14 @@ export default function EventsListScreen() {
 
       {/* ── LIST ── */}
       <LinearGradient
-        colors={['#93C5FD', '#A5B4FC', '#C4B5FD', '#ffffff'] as const}
-        locations={[0, 0.3, 0.65, 1]}
+        colors={[colors.primaryMid, colors.background] as const}
+        locations={[0, 0.35]}
         style={{ flex: 1 }}
       >
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading events…</Text>
+          <Text style={styles.loadingText}>{getLoadingVerse()}</Text>
         </View>
       ) : (
         <SectionList
@@ -294,6 +318,8 @@ export default function EventsListScreen() {
               <Text style={styles.emptySubtitle}>
                 {search || regionFilters.length > 0
                   ? 'Try changing your filters or search term.'
+                  : timeFilters.includes('today')
+                  ? 'No events scheduled for today.'
                   : timeFilters.includes('past') && !timeFilters.includes('upcoming')
                   ? 'No past events yet.'
                   : 'No upcoming events scheduled.'}
@@ -318,11 +344,9 @@ export default function EventsListScreen() {
   );
 }
 
-function cardColors(countdown: string | null, isPast: boolean): [string, string] {
-  if (isPast) return ['#ffffff', '#c0e0fc'];
-  if (countdown === 'Today') return ['#ffffff', '#c0e0fc'];
-  if (countdown === 'Tomorrow') return ['#ffffff', '#c0e0fc'];
-  return ['#ffffff', '#c0e0fc'];
+function cardColors(_countdown: string | null, _isPast: boolean): [string, string] {
+  // Cards are solid white for a clean, professional look
+  return ['#ffffff', '#ffffff'];
 }
 
 function cardAccent(countdown: string | null, isPast: boolean): string {
@@ -512,6 +536,10 @@ const styles = StyleSheet.create({
   chipActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+  },
+  chipTodayActive: {
+    backgroundColor: colors.danger,
+    borderColor: colors.danger,
   },
   chipText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   chipTextActive: { color: '#fff' },

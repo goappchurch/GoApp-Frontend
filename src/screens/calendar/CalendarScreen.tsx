@@ -19,7 +19,8 @@ import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../contexts/AuthContext';
 import { getEventsByMonth, getUpcomingEvents } from '../../services/events';
 import { Event } from '../../types';
-import { eventTypeIcons } from '../../constants/theme';
+import { eventTypeIcons, colors } from '../../constants/theme';
+import { getLoadingVerse } from '../../constants/verses';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -244,6 +245,39 @@ export default function CalendarScreen() {
     return map;
   }, [weekDays, events]);
 
+  const weekSpans = useMemo(() => {
+    const raw: { startCol: number; endCol: number; isEventStart: boolean; isEventEnd: boolean }[] = [];
+    for (const ev of events) {
+      const evStart = ev.date_start.split('T')[0];
+      const evEnd = ev.date_end ? ev.date_end.split('T')[0] : evStart;
+      if (evStart === evEnd) continue;
+      if (evStart > weekDays[6] || evEnd < weekDays[0]) continue;
+
+      let startCol = 0, isEventStart = false;
+      for (let i = 0; i < weekDays.length; i++) {
+        if (weekDays[i] >= evStart) { startCol = i; isEventStart = weekDays[i] === evStart; break; }
+      }
+      let endCol = 6, isEventEnd = false;
+      for (let i = weekDays.length - 1; i >= 0; i--) {
+        if (weekDays[i] <= evEnd) { endCol = i; isEventEnd = weekDays[i] === evEnd; break; }
+      }
+      raw.push({ startCol, endCol, isEventStart, isEventEnd });
+    }
+    return raw.reduce<{ startCol: number; endCol: number; isEventStart: boolean; isEventEnd: boolean }[]>(
+      (acc, span) => {
+        const hit = acc.find(r => span.startCol <= r.endCol + 1 && span.endCol >= r.startCol - 1);
+        if (hit) {
+          if (span.startCol < hit.startCol) { hit.startCol = span.startCol; hit.isEventStart = span.isEventStart; }
+          if (span.endCol > hit.endCol) { hit.endCol = span.endCol; hit.isEventEnd = span.isEventEnd; }
+        } else {
+          acc.push({ ...span });
+        }
+        return acc;
+      },
+      []
+    );
+  }, [weekDays, events]);
+
   const calGrid = useMemo(
     () => buildCalendarGrid(currentMonth.year, currentMonth.month),
     [currentMonth],
@@ -298,18 +332,31 @@ export default function CalendarScreen() {
     });
   }, [calGrid, events, currentMonth]);
 
+  const lastTapRef = useRef<{ date: string; time: number } | null>(null);
+
+  const handleDoubleTap = useCallback((ds: string, hasEvents: boolean) => {
+    if (!isAssistant || hasEvents) return;
+    const now = Date.now();
+    if (lastTapRef.current?.date === ds && now - lastTapRef.current.time < 350) {
+      lastTapRef.current = null;
+      navigation.navigate('AddEditEvent', { defaultDate: ds });
+    } else {
+      lastTapRef.current = { date: ds, time: now };
+    }
+  }, [isAssistant, navigation]);
+
   if (pageLoading) {
     return (
       <LinearGradient
-        colors={['#2D1B8E', '#4C1D95', '#6D28D9', '#8B5CF6', '#C4B5FD']}
+        colors={[colors.primaryDarker, colors.primary]}
         locations={[0, 0.15, 0.40, 0.68, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 }}
       >
-        <ActivityIndicator size="large" color="#A78BFA" />
-        <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' }}>
-          Loading calendar…
+        <ActivityIndicator size="large" color="#A5B4FC" />
+        <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingHorizontal: 32 }}>
+          {getLoadingVerse()}
         </Text>
       </LinearGradient>
     );
@@ -317,7 +364,7 @@ export default function CalendarScreen() {
 
   return (
     <LinearGradient
-      colors={['#2D1B8E', '#4C1D95', '#6D28D9', '#8B5CF6', '#C4B5FD']}
+      colors={[colors.primaryDarker, colors.primary]}
       locations={[0, 0.15, 0.40, 0.68, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
@@ -345,7 +392,7 @@ export default function CalendarScreen() {
             )}
             <Text style={styles.headerSub}>
               {eventsLoading
-                ? 'Refreshing…'
+                ? '✦'
                 : viewMode === 'agenda'
                   ? `${agendaEvents.length} upcoming event${agendaEvents.length !== 1 ? 's' : ''}`
                   : `${events.length} event${events.length !== 1 ? 's' : ''} this month`}
@@ -384,7 +431,7 @@ export default function CalendarScreen() {
               >
                 {viewMode === tab.key ? (
                   <LinearGradient
-                    colors={['#7C3AED', '#8B5CF6', '#A855F7']}
+                    colors={[colors.primary, colors.accent]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.segTabGrad}
@@ -414,8 +461,8 @@ export default function CalendarScreen() {
             <>
               {/* Custom Calendar Card */}
               <LinearGradient
-                colors={['#fbfbfb', '#e3e2e9', '#e19b46']}
-                locations={[0, 0.55, 1]}
+                colors={['#ffffff', '#ffffff']}
+                locations={[0, 0, 1]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.calCard}
@@ -423,13 +470,13 @@ export default function CalendarScreen() {
                 {/* Month navigation */}
                 <View style={styles.calNav}>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => handleMonthStep(-1)} activeOpacity={0.7}>
-                    <Ionicons name="chevron-back" size={19} color="#6D28D9" />
+                    <Ionicons name="chevron-back" size={19} color="#4338CA" />
                   </TouchableOpacity>
                   <Text style={[styles.calNavTitle, { color: '#090909', fontSize: 20, fontWeight: '700' }]}>
                     {formatMonthYear(currentMonth.year, currentMonth.month)}
                   </Text>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => handleMonthStep(1)} activeOpacity={0.7}>
-                    <Ionicons name="chevron-forward" size={19} color="#6D28D9" />
+                    <Ionicons name="chevron-forward" size={19} color="#4338CA" />
                   </TouchableOpacity>
                 </View>
 
@@ -437,7 +484,7 @@ export default function CalendarScreen() {
                 <View style={styles.calHeaders}>
                   {WEEKDAY_LABELS.map((w, i) => (
                     <View key={i} style={styles.calHeaderCell}>
-                      <Text style={[styles.calHeaderText, { color: '#4f1ad6', fontSize: 12, fontWeight: '800' }]}>
+                      <Text style={[styles.calHeaderText, { color: '#4F46E5', fontSize: 12, fontWeight: '800' }]}>
                         {w}
                       </Text>
                     </View>
@@ -502,7 +549,6 @@ export default function CalendarScreen() {
                         }
 
                         const ds = `${currentMonth.year}-${String(currentMonth.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        const isToday = ds === todayStr;
                         const isSelected = ds === selectedDate;
                         const dayEvts = dateEventMap[ds] ?? [];
                         // Any event on this day → show green capsule,
@@ -518,6 +564,8 @@ export default function CalendarScreen() {
                               if (dayEvts.length > 0) {
                                 setPopupDate(ds);
                                 setPopupEvents(dayEvts);
+                              } else {
+                                handleDoubleTap(ds, false);
                               }
                             }}
                             activeOpacity={0.7}
@@ -525,16 +573,7 @@ export default function CalendarScreen() {
                             {spanBg}
                             {isSelected ? (
                               <LinearGradient
-                                colors={['#F59E0B', '#FB923C', '#F97316']}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.calDayCapsule}
-                              >
-                                <Text style={styles.calDayTextBright}>{day}</Text>
-                              </LinearGradient>
-                            ) : isToday ? (
-                              <LinearGradient
-                                colors={['#8B5CF6', '#7C3AED']}
+                                colors={[colors.primary, colors.primaryDark]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={styles.calDayCapsule}
@@ -585,7 +624,7 @@ export default function CalendarScreen() {
               <View style={styles.weekCard}>
                 <View style={styles.weekNav}>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => goWeek(-1)} activeOpacity={0.7}>
-                    <Ionicons name="chevron-back" size={18} color="#6D28D9" />
+                    <Ionicons name="chevron-back" size={18} color="#4338CA" />
                   </TouchableOpacity>
                   <Text style={styles.weekRangeText}>
                     {new Date(weekDays[0] + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -593,52 +632,72 @@ export default function CalendarScreen() {
                     {new Date(weekDays[6] + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </Text>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => goWeek(1)} activeOpacity={0.7}>
-                    <Ionicons name="chevron-forward" size={18} color="#6D28D9" />
+                    <Ionicons name="chevron-forward" size={18} color="#4338CA" />
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.weekDays}>
-                  {weekDays.map((ds) => {
+                  {weekDays.map((ds, ci) => {
                     const d = new Date(ds + 'T00:00:00');
                     const isSelected = ds === selectedDate;
-                    const isToday = ds === todayStr;
                     const dayEvts = weekEventMap[ds] ?? [];
+
+                    const spanForCol = weekSpans.find(s => ci >= s.startCol && ci <= s.endCol);
+                    const isInSpan = !!spanForCol;
+                    const roundLeft  = isInSpan && ci === spanForCol!.startCol && spanForCol!.isEventStart;
+                    const roundRight = isInSpan && ci === spanForCol!.endCol   && spanForCol!.isEventEnd;
+
                     return (
                       <TouchableOpacity
                         key={ds}
                         style={styles.weekDayCol}
-                        onPress={() => setSelectedDate(ds)}
+                        onPress={() => {
+                          setSelectedDate(ds);
+                          handleDoubleTap(ds, dayEvts.length > 0);
+                        }}
                         activeOpacity={0.75}
                       >
-                        <Text style={[styles.weekDayName, isToday && { color: '#7C3AED' }]}>
+                        <Text style={styles.weekDayName}>
                           {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
                         </Text>
-                        {isSelected ? (
-                          <LinearGradient
-                            colors={['#F59E0B', '#FB923C', '#F97316']}
-                            style={styles.weekDayCircleSel}
-                          >
-                            <Text style={styles.weekDayNumTextSel}>{d.getDate()}</Text>
-                          </LinearGradient>
-                        ) : isToday ? (
-                          <LinearGradient
-                            colors={['#8B5CF6', '#7C3AED']}
-                            style={styles.weekDayCircleSel}
-                          >
-                            <Text style={styles.weekDayNumTextSel}>{d.getDate()}</Text>
-                          </LinearGradient>
-                        ) : (
-                          <View style={styles.weekDayCircle}>
-                            <Text style={styles.weekDayNumText}>{d.getDate()}</Text>
-                          </View>
-                        )}
-                        <View style={styles.weekDots}>
-                          {dayEvts.slice(0, 3).map((_, i) => (
+                        <View style={styles.weekCircleWrap}>
+                          {isInSpan && (
                             <View
-                              key={i}
-                              style={[styles.weekDot, { backgroundColor: '#22C55E' }]}
+                              pointerEvents="none"
+                              style={{
+                                position: 'absolute',
+                                left: roundLeft ? 4 : 0,
+                                right: roundRight ? 4 : 0,
+                                top: 0, bottom: 0,
+                                backgroundColor: '#22C55E',
+                                borderTopLeftRadius: roundLeft ? 20 : 0,
+                                borderBottomLeftRadius: roundLeft ? 20 : 0,
+                                borderTopRightRadius: roundRight ? 20 : 0,
+                                borderBottomRightRadius: roundRight ? 20 : 0,
+                              }}
                             />
-                          ))}
+                          )}
+                          {dayEvts.length > 0 ? (
+                            <LinearGradient
+                              colors={['#22C55E', '#16A34A']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={styles.weekDayCircleSel}
+                            >
+                              <Text style={styles.weekDayNumTextSel}>{d.getDate()}</Text>
+                            </LinearGradient>
+                          ) : isSelected ? (
+                            <LinearGradient
+                              colors={[colors.primary, colors.primaryDark]}
+                              style={styles.weekDayCircleSel}
+                            >
+                              <Text style={styles.weekDayNumTextSel}>{d.getDate()}</Text>
+                            </LinearGradient>
+                          ) : (
+                            <View style={styles.weekDayCircle}>
+                              <Text style={styles.weekDayNumText}>{d.getDate()}</Text>
+                            </View>
+                          )}
                         </View>
                       </TouchableOpacity>
                     );
@@ -661,7 +720,7 @@ export default function CalendarScreen() {
             <View style={styles.agendaWrap}>
               {eventsLoading ? (
                 <View style={styles.eventsLoader}>
-                  <ActivityIndicator color="#A78BFA" />
+                  <ActivityIndicator color="#A5B4FC" />
                 </View>
               ) : agendaGroups.length === 0 ? (
                 <EmptyState title="Nothing scheduled" subtitle="No upcoming events in the next 90 days" />
@@ -685,7 +744,7 @@ export default function CalendarScreen() {
                         <View key={dk} style={styles.agendaDateRow}>
                           {isToday ? (
                             <LinearGradient
-                              colors={['#7C3AED', '#A855F7']}
+                              colors={[colors.primary, colors.accent]}
                               style={styles.agendaDateBubble}
                             >
                               <Text style={[styles.agendaDateDay, { color: '#fff' }]}>
@@ -732,7 +791,7 @@ export default function CalendarScreen() {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={['#7C3AED', '#6D28D9', '#A855F7']}
+              colors={[colors.primary, colors.primaryDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.fabGrad}
@@ -775,7 +834,7 @@ function DayPanel({
       <View style={styles.dayPanelHeader}>
         <View style={styles.dayPanelLeft}>
           {isToday ? (
-            <LinearGradient colors={['#8B5CF6', '#7C3AED']} style={styles.dayCircle}>
+            <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.dayCircle}>
               <Text style={styles.dayCircleNumActive}>{d.getDate()}</Text>
             </LinearGradient>
           ) : (
@@ -795,21 +854,21 @@ function DayPanel({
         </View>
         <View style={styles.dayPanelNav}>
           <TouchableOpacity style={styles.navArrow} onPress={() => onNavigate(addDays(dateStr, -1))}>
-            <Ionicons name="chevron-back" size={15} color="#6D28D9" />
+            <Ionicons name="chevron-back" size={15} color="#4338CA" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.navArrow} onPress={() => onNavigate(addDays(dateStr, 1))}>
-            <Ionicons name="chevron-forward" size={15} color="#6D28D9" />
+            <Ionicons name="chevron-forward" size={15} color="#4338CA" />
           </TouchableOpacity>
         </View>
       </View>
 
       {loading ? (
         <View style={styles.eventsLoader}>
-          <ActivityIndicator color="#A78BFA" size="small" />
+          <ActivityIndicator color="#A5B4FC" size="small" />
         </View>
       ) : events.length === 0 ? (
         <View style={styles.noDayEvents}>
-          <Ionicons name="calendar-outline" size={19} color="#7C3AED" />
+          <Ionicons name="calendar-outline" size={19} color="#4F46E5" />
           <Text style={styles.noDayText}>No events on this day</Text>
         </View>
       ) : (
@@ -828,7 +887,7 @@ function DayPanel({
 function PremiumEventCard({ event, onPress }: { event: Event; onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.premCard} onPress={onPress} activeOpacity={0.8}>
-      <View style={[styles.premStripe, { backgroundColor: '#7C3AED' }]} />
+      <View style={[styles.premStripe, { backgroundColor: '#4F46E5' }]} />
       <View style={styles.premIconBox}>
         <Text style={{ fontSize: 17 }}>{eventTypeIcons[event.event_type] ?? '📅'}</Text>
       </View>
@@ -855,10 +914,10 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <View style={styles.emptyWrap}>
       <LinearGradient
-        colors={['rgba(124,58,237,0.32)', 'rgba(168,85,247,0.18)']}
+        colors={['rgba(79,70,229,0.32)', 'rgba(99,102,241,0.18)']}
         style={styles.emptyIconCircle}
       >
-        <Ionicons name="calendar-outline" size={32} color="#A78BFA" />
+        <Ionicons name="calendar-outline" size={32} color="#A5B4FC" />
       </LinearGradient>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptySubtitle}>{subtitle}</Text>
@@ -909,7 +968,7 @@ function DatePopupModal({
 
           {/* ── Header ── */}
           <View style={popupStyles.header}>
-            <LinearGradient colors={['#7C3AED', '#A855F7']} style={popupStyles.dateBadge}>
+            <LinearGradient colors={[colors.primary, colors.accent]} style={popupStyles.dateBadge}>
               <Text style={popupStyles.dateBadgeNum}>{d.getDate()}</Text>
             </LinearGradient>
             <View style={popupStyles.headerMid}>
@@ -943,6 +1002,7 @@ function DatePopupModal({
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             scrollEventThrottle={16}
+            style={{ scrollSnapType: 'x mandatory' } as any}
             onScroll={(e) => {
               const page = Math.round(e.nativeEvent.contentOffset.x / cardWidth);
               setCurrentPage(page);
@@ -954,7 +1014,7 @@ function DatePopupModal({
                 ? `${venue.city}, ${venue.country}`
                 : venue?.city ?? venue?.name ?? null;
               return (
-                <View key={ev.id} style={{ width: cardWidth }}>
+                <View key={ev.id} style={{ width: cardWidth, scrollSnapAlign: 'start', scrollSnapStop: 'always' } as any}>
                   {/* Poster banner */}
                   <TouchableOpacity
                     style={popupStyles.posterBanner}
@@ -973,7 +1033,7 @@ function DatePopupModal({
                       </View>
                     )}
                     <LinearGradient
-                      colors={['transparent', 'rgba(26,14,64,0.92)']}
+                      colors={['transparent', 'rgba(15,23,42,0.92)']}
                       style={popupStyles.posterGradient}
                     />
                     {ev.poster_url && (
@@ -997,14 +1057,14 @@ function DatePopupModal({
                     <View style={popupStyles.metaList}>
                       <View style={popupStyles.metaRow}>
                         <View style={popupStyles.metaIconBox}>
-                          <Ionicons name="time-outline" size={14} color="#A78BFA" />
+                          <Ionicons name="time-outline" size={14} color="#A5B4FC" />
                         </View>
                         <Text style={popupStyles.metaText}>{formatTime(ev.date_start)}</Text>
                       </View>
                       {location && (
                         <View style={popupStyles.metaRow}>
                           <View style={popupStyles.metaIconBox}>
-                            <Ionicons name="location-outline" size={14} color="#A78BFA" />
+                            <Ionicons name="location-outline" size={14} color="#A5B4FC" />
                           </View>
                           <Text style={popupStyles.metaText} numberOfLines={1}>{location}</Text>
                         </View>
@@ -1017,7 +1077,7 @@ function DatePopupModal({
                       activeOpacity={0.8}
                     >
                       <LinearGradient
-                        colors={['#7C3AED', '#8B5CF6', '#A855F7']}
+                        colors={[colors.primary, colors.accent]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={popupStyles.openBtnGrad}
@@ -1095,7 +1155,7 @@ const styles = StyleSheet.create({
     width: 520,
     height: 520,
     borderRadius: 260,
-    backgroundColor: 'rgba(251,146,60,0.20)',
+    backgroundColor: 'rgba(99,102,241,0.16)',
   },
   // Lavender glow — center area softener for glassmorphism feel
   orb2: {
@@ -1105,7 +1165,7 @@ const styles = StyleSheet.create({
     width: 380,
     height: 380,
     borderRadius: 190,
-    backgroundColor: 'rgba(196,181,253,0.18)',
+    backgroundColor: 'rgba(165,180,252,0.18)',
   },
 
   // White diffusion glow — center-right, creates the airy glassmorphism softness
@@ -1205,9 +1265,9 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 4,
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.14)',
+    borderColor: 'rgba(79,70,229,0.14)',
     marginBottom: 12,
-    shadowColor: '#6D28D9',
+    shadowColor: '#4338CA',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.10,
     shadowRadius: 24,
@@ -1223,11 +1283,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(109,40,217,0.08)',
+    backgroundColor: 'rgba(67,56,202,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(109,40,217,0.15)',
+    borderColor: 'rgba(67,56,202,0.15)',
   },
   calNavTitle: {
     fontSize: 15,
@@ -1240,7 +1300,7 @@ const styles = StyleSheet.create({
   calHeaderText: {
     fontSize: 11,
     fontWeight: '700',
-    color: 'rgba(109,40,217,0.6)',
+    color: 'rgba(67,56,202,0.6)',
     letterSpacing: 0.5,
   },
   calRow: { flexDirection: 'row', marginBottom: 1 },
@@ -1322,7 +1382,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     marginHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.10)',
+    borderColor: 'rgba(79,70,229,0.10)',
   },
   dayPanelHeader: {
     flexDirection: 'row',
@@ -1339,9 +1399,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dayCircleInactive: {
-    backgroundColor: 'rgba(109,40,217,0.08)',
+    backgroundColor: 'rgba(67,56,202,0.08)',
     borderWidth: 1.5,
-    borderColor: 'rgba(109,40,217,0.18)',
+    borderColor: 'rgba(67,56,202,0.18)',
   },
   dayCircleNum: { fontSize: 19, fontWeight: '800', color: '#374151' },
   dayCircleNumActive: { fontSize: 19, fontWeight: '800', color: '#fff' },
@@ -1352,11 +1412,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(109,40,217,0.07)',
+    backgroundColor: 'rgba(67,56,202,0.07)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(109,40,217,0.15)',
+    borderColor: 'rgba(67,56,202,0.15)',
   },
   eventsLoader: { paddingVertical: 24, alignItems: 'center' },
   noDayEvents: {
@@ -1367,7 +1427,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     borderWidth: 1,
-    borderColor: 'rgba(109,40,217,0.1)',
+    borderColor: 'rgba(67,56,202,0.1)',
     marginBottom: 8,
   },
   noDayText: { color: '#4B5563', fontSize: 14, fontWeight: '500' },
@@ -1381,8 +1441,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.12)',
-    shadowColor: '#6D28D9',
+    borderColor: 'rgba(79,70,229,0.12)',
+    shadowColor: '#4338CA',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
@@ -1393,7 +1453,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 13,
-    backgroundColor: 'rgba(109,40,217,0.07)',
+    backgroundColor: 'rgba(67,56,202,0.07)',
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 10,
@@ -1411,9 +1471,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.14)',
+    borderColor: 'rgba(79,70,229,0.14)',
     marginBottom: 12,
-    shadowColor: '#6D28D9',
+    shadowColor: '#4338CA',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.10,
     shadowRadius: 24,
@@ -1426,7 +1486,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(109,40,217,0.1)',
+    borderBottomColor: 'rgba(67,56,202,0.1)',
   },
   weekRangeText: { fontSize: 13, fontWeight: '700', color: '#1F1F3A' },
   weekDays: { flexDirection: 'row', paddingTop: 14, paddingHorizontal: 8 },
@@ -1443,7 +1503,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(109,40,217,0.06)',
+    backgroundColor: 'rgba(67,56,202,0.06)',
   },
   weekDayCircleSel: {
     width: 36,
@@ -1454,8 +1514,13 @@ const styles = StyleSheet.create({
   },
   weekDayNumText: { fontSize: 14, fontWeight: '700', color: '#374151' },
   weekDayNumTextSel: { fontSize: 14, fontWeight: '800', color: '#fff' },
-  weekDots: { flexDirection: 'row', gap: 2, height: 8, alignItems: 'center' },
-  weekDot: { width: 5, height: 5, borderRadius: 2.5 },
+  weekCircleWrap: {
+    position: 'relative',
+    width: '100%',
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Agenda
   agendaWrap: { padding: 16 },
@@ -1469,19 +1534,19 @@ const styles = StyleSheet.create({
   agendaMonthText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#7C3AED',
+    color: '#4F46E5',
     letterSpacing: 1.5,
   },
-  agendaMonthLine: { flex: 1, height: 1, backgroundColor: 'rgba(124,58,237,0.15)' },
+  agendaMonthLine: { flex: 1, height: 1, backgroundColor: 'rgba(79,70,229,0.15)' },
   agendaMonthBadge: {
-    backgroundColor: 'rgba(124,58,237,0.1)',
+    backgroundColor: 'rgba(79,70,229,0.1)',
     borderRadius: 20,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.25)',
+    borderColor: 'rgba(79,70,229,0.25)',
   },
-  agendaMonthBadgeText: { fontSize: 11, fontWeight: '800', color: '#7C3AED' },
+  agendaMonthBadgeText: { fontSize: 11, fontWeight: '800', color: '#4F46E5' },
   agendaDateRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   agendaDateBubble: {
     width: 52,
@@ -1491,7 +1556,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.15)',
+    borderColor: 'rgba(79,70,229,0.15)',
     alignSelf: 'flex-start',
     overflow: 'hidden',
   },
@@ -1534,7 +1599,7 @@ const styles = StyleSheet.create({
     height: 62,
     borderRadius: 31,
     overflow: 'hidden',
-    shadowColor: '#A855F7',
+    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.55,
     shadowRadius: 30,
@@ -1560,7 +1625,7 @@ const popupStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(167,139,250,0.30)',
     overflow: 'hidden',
-    shadowColor: '#8B5CF6',
+    shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.35,
     shadowRadius: 30,
@@ -1591,14 +1656,14 @@ const popupStyles = StyleSheet.create({
   headerWeekday: { fontSize: 16, fontWeight: '800', color: '#fff' },
   headerMonth: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   pageCounter: {
-    backgroundColor: 'rgba(124,58,237,0.18)',
+    backgroundColor: 'rgba(79,70,229,0.18)',
     borderRadius: 12,
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: 'rgba(167,139,250,0.35)',
   },
-  pageCounterText: { fontSize: 11, fontWeight: '800', color: '#A78BFA' },
+  pageCounterText: { fontSize: 11, fontWeight: '800', color: '#A5B4FC' },
   closeBtn: {
     width: 34,
     height: 34,
@@ -1664,7 +1729,7 @@ const popupStyles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 9,
-    backgroundColor: 'rgba(124,58,237,0.18)',
+    backgroundColor: 'rgba(79,70,229,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1698,7 +1763,7 @@ const popupStyles = StyleSheet.create({
     width: 22,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#A855F7',
+    backgroundColor: '#6366F1',
   },
   swipeHint: {
     fontSize: 10,

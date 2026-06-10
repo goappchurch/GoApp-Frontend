@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Pressable,
   Alert,
   ActivityIndicator,
   Linking,
@@ -17,7 +16,6 @@ import {
 import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -25,15 +23,14 @@ import {
   deleteEvent,
   getNotes,
   addNote,
-  getDocuments,
   getTasks,
   createTask,
   toggleTask,
 } from '../../services/events';
-import { supabase } from '../../lib/supabase';
-import { Event, Note, Document, Task } from '../../types';
+import { Event, Note, Task } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, shadow, radius, eventTypeLabels } from '../../constants/theme';
+import { getLoadingVerse } from '../../constants/verses';
 
 type RouteProps = RouteProp<RootStackParamList, 'EventDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -42,22 +39,16 @@ export default function EventDetailScreen() {
   const route = useRoute<RouteProps>();
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
-  const isBoss = user?.role === 'boss';
   const isAssistant = user?.role === 'assistant';
 
   const [event, setEvent] = useState<Event | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
-  const [documents, setDocuments] = useState<Document[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [noteText, setNoteText] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [playingId, setPlayingId] = useState<string | null>(null);
   const [showPoster, setShowPoster] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
-  const soundRef = useRef<Audio.Sound | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const formScrollRef = useRef<ScrollView>(null);
@@ -87,6 +78,7 @@ export default function EventDetailScreen() {
           colors={['#4C1D95', '#6D28D9', '#8B5CF6'] as const}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={{ flex: 1 }}
+          pointerEvents="none"
         />
       ),
       headerTitle: () => (
@@ -101,10 +93,10 @@ export default function EventDetailScreen() {
       ),
       headerTintColor: '#fff',
       headerRight: isAssistant && event ? () => (
-        <Pressable
+        <TouchableOpacity
           onPress={() => navigation.navigate('AddEditEvent', { eventId: event.id })}
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.2)',
+          style={{
+            backgroundColor: 'rgba(255,255,255,0.2)',
             borderRadius: 14,
             width: 44,
             height: 44,
@@ -113,11 +105,12 @@ export default function EventDetailScreen() {
             marginRight: 6,
             borderWidth: 1.5,
             borderColor: 'rgba(255,255,255,0.35)',
-          })}
-          hitSlop={12}
+          }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.7}
         >
           <Ionicons name="create-outline" size={20} color="#fff" />
-        </Pressable>
+        </TouchableOpacity>
       ) : undefined,
     });
   }, [navigation, event, isAssistant]);
@@ -125,15 +118,13 @@ export default function EventDetailScreen() {
   const loadEvent = useCallback(async () => {
     try {
       setLoading(true);
-      const [ev, n, d, t] = await Promise.all([
+      const [ev, n, t] = await Promise.all([
         getEventById(route.params.eventId),
         getNotes(route.params.eventId),
-        getDocuments(route.params.eventId),
         getTasks(route.params.eventId),
       ]);
       setEvent(ev);
       setNotes(n);
-      setDocuments(d);
       setTasks(t);
     } catch (e) {
       Alert.alert('Error', 'Could not load event');
@@ -184,56 +175,6 @@ export default function EventDetailScreen() {
     setNotes(updated);
   };
 
-  const handleStartRecording = async () => {
-    try {
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-      setIsRecording(true);
-    } catch (e) {
-      Alert.alert('Error', 'Could not start recording');
-    }
-  };
-
-  const handleStopRecording = async () => {
-    if (!recording || !user) return;
-    setIsRecording(false);
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
-    setRecording(null);
-    if (!uri) return;
-
-    const fileName = `voice-${Date.now()}.m4a`;
-    const formData = new FormData();
-    formData.append('file', { uri, name: fileName, type: 'audio/m4a' } as unknown as Blob);
-
-    const { data, error } = await supabase.storage.from('voice-notes').upload(fileName, formData);
-    if (error) { Alert.alert('Upload failed', error.message); return; }
-    const { data: { publicUrl } } = supabase.storage.from('voice-notes').getPublicUrl(data.path);
-
-    const status = await recording.getStatusAsync();
-    await addNote(event?.id, user.id, 'voice', undefined, publicUrl, Math.round((status as any).durationMillis / 1000));
-    const updated = await getNotes(route.params.eventId);
-    setNotes(updated);
-  };
-
-  const handlePlayVoice = async (note: Note) => {
-    if (playingId === note.id) {
-      await soundRef.current?.stopAsync();
-      setPlayingId(null);
-      return;
-    }
-    if (soundRef.current) { await soundRef.current.unloadAsync(); }
-    const { sound } = await Audio.Sound.createAsync({ uri: note.voice_url! });
-    soundRef.current = sound;
-    setPlayingId(note.id);
-    await sound.playAsync();
-    sound.setOnPlaybackStatusUpdate((s) => {
-      if ((s as any).didJustFinish) setPlayingId(null);
-    });
-  };
-
   const handleAddTask = async () => {
     if (!newTaskTitle.trim() || !event) return;
     await createTask(event.id, newTaskTitle.trim());
@@ -267,18 +208,13 @@ export default function EventDetailScreen() {
     Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
   };
 
-  const handleOpenMaps = () => {
-    if (!event?.venue?.address) return;
-    const q = encodeURIComponent([event.venue.name, event.venue.address, event.venue.city].filter(Boolean).join(', '));
-    Linking.openURL(`https://maps.google.com/?q=${q}`);
-  };
 
   if (loading || !event) {
     return (
       <View style={styles.loadingWrap}>
         <LinearGradient colors={['#EDE9FE', '#F5F3FF']} style={styles.loadingGrad}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading event…</Text>
+          <Text style={styles.loadingText}>{getLoadingVerse()}</Text>
         </LinearGradient>
       </View>
     );
@@ -301,7 +237,6 @@ export default function EventDetailScreen() {
     ...((event.companions ?? []).length > 0                      ? [{ key: 'companions', label: 'Team',      icon: 'people-outline' as const,                     color: '#0D9488' }] : []),
     ...((event.speaking_topic || event.expected_audience || event.timezone) ? [{ key: 'others', label: 'Others', icon: 'ellipsis-horizontal-circle-outline' as const, color: '#475569' }] : []),
     { key: 'notes',     label: 'Notes',     icon: 'document-text-outline' as const,              color: '#7C3AED' },
-    { key: 'documents', label: 'Docs',      icon: 'folder-open-outline' as const,                color: '#475569' },
     ...(isAssistant                                              ? [{ key: 'tasks',      label: 'Tasks',     icon: 'checkmark-circle-outline' as const,           color: '#059669' }] : []),
   ];
   sectionsRef.current = sections;
@@ -380,7 +315,7 @@ export default function EventDetailScreen() {
             style={styles.posterOverlay}
           >
             <View style={styles.heroBottom}>
-              <Text style={[styles.heroTitle, { flex: 1 }, { fontSize: 32 }]} numberOfLines={3}>{event.title}</Text>
+              <Text style={[styles.heroTitle, { flex: 1 }]} numberOfLines={3}>{event.title}</Text>
               <TouchableOpacity style={styles.heroShareBtn} onPress={handleWhatsAppShare} activeOpacity={0.85}>
                 <Ionicons name="logo-whatsapp" size={15} color="#fff" />
                 <Text style={styles.heroShareText}>Share</Text>
@@ -442,18 +377,6 @@ export default function EventDetailScreen() {
                 {/* Row 2: Full-width address */}
                 {v.address && <InfoRow label="Address" value={v.address} icon="navigate-outline" iconColor="#059669" last={!v.region} />}
                 {v.region && <InfoRow label="Region" value={v.region} icon="map-outline" iconColor="#059669" last />}
-                {v.address && (
-                  <TouchableOpacity style={styles.mapBtn} onPress={handleOpenMaps} activeOpacity={0.85}>
-                    <LinearGradient colors={['#D1FAE5', '#A7F3D0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mapBtnInner}>
-                      <View style={styles.mapBtnIconWrap}>
-                        <Ionicons name="map-outline" size={11} color="#059669" />
-                      </View>
-                      <Text style={styles.mapBtnText}>View in Maps</Text>
-                      <View style={{ flex: 1 }} />
-                      <Ionicons name="chevron-forward" size={11} color="#059669" />
-                    </LinearGradient>
-                  </TouchableOpacity>
-                )}
               </Section>
             </View>
           )}
@@ -611,24 +534,13 @@ export default function EventDetailScreen() {
           <View onLayout={trackY('notes')}>
           <Section icon="document-text-outline" bgGradient={['#EEE8FF', '#FAFAFA']} iconGradient={['#7C3AED', '#9333EA']} emoji="📝" title="Notes" delay={380}>
             {notes.length === 0 && <Text style={styles.emptyText}>No notes yet</Text>}
-            {notes.map((note) => (
+            {notes.filter(n => n.type === 'text').map((note) => (
               <View key={note.id} style={styles.noteItem}>
-                {note.type === 'text' ? (
-                  <Text style={styles.noteContent}>{note.content}</Text>
-                ) : (
-                  <TouchableOpacity style={styles.voiceNote} onPress={() => handlePlayVoice(note)}>
-                    <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.playBtn}>
-                      <Ionicons name={playingId === note.id ? 'pause' : 'play'} size={16} color="#fff" />
-                    </LinearGradient>
-                    <View>
-                      <Text style={styles.voiceLabel}>Voice note</Text>
-                      {note.duration_seconds && <Text style={styles.voiceDuration}>{note.duration_seconds}s</Text>}
-                    </View>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.noteContent}>{note.content}</Text>
                 <Text style={styles.noteMeta}>{new Date(note.created_at).toLocaleString()}</Text>
               </View>
             ))}
+            {isAssistant && (
             <View style={styles.noteInput}>
               <Text style={styles.inputLabel}>Add note</Text>
               <View style={styles.noteRow}>
@@ -641,36 +553,8 @@ export default function EventDetailScreen() {
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
-                onPress={isRecording ? handleStopRecording : handleStartRecording}
-                activeOpacity={0.85}
-              >
-                <Ionicons name={isRecording ? 'stop-circle' : 'mic'} size={20} color={isRecording ? '#fff' : colors.primary} />
-                <Text style={[styles.recordBtnText, isRecording && { color: '#fff' }]}>
-                  {isRecording ? 'Stop Recording' : 'Record Voice Note'}
-                </Text>
-              </TouchableOpacity>
             </View>
-          </Section>
-          </View>
-
-          {/* ── Documents ── */}
-          <View onLayout={trackY('documents')}>
-          <Section icon="folder-open-outline" bgGradient={['#E2E8F0', '#FAFAFA']} iconGradient={['#475569', '#334155']} emoji="📁" title="Documents" delay={420}>
-            {documents.length === 0 && <Text style={styles.emptyText}>No documents uploaded</Text>}
-            {documents.map((doc) => (
-              <TouchableOpacity key={doc.id} style={styles.docItem} onPress={() => Linking.openURL(doc.file_url)} activeOpacity={0.8}>
-                <LinearGradient colors={['#7C3AED', '#6D28D9']} style={styles.docIconWrap}>
-                  <Ionicons name="document-text-outline" size={18} color="#fff" />
-                </LinearGradient>
-                <View style={styles.docInfo}>
-                  <Text style={styles.docName}>{doc.file_name ?? 'Document'}</Text>
-                  <Text style={styles.docMeta}>{doc.category} · {new Date(doc.created_at).toLocaleDateString()}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
-              </TouchableOpacity>
-            ))}
+            )}
           </Section>
           </View>
 
@@ -705,7 +589,7 @@ export default function EventDetailScreen() {
             </View>
           )}
 
-          {(isAssistant || isBoss) && (
+          {isAssistant && (
             <TouchableOpacity style={styles.deleteBottomBtn} onPress={handleDelete} activeOpacity={0.8}>
               <Ionicons name="trash-outline" size={18} color={colors.danger} />
               <Text style={styles.deleteBottomText}>Delete Event</Text>
@@ -773,7 +657,7 @@ function Section({
           </LinearGradient>
           <Text style={{ fontSize: 20 }}>{emoji}</Text>
         </View>
-        <View style={edc.innerBox}>{children}</View>
+        <View>{children}</View>
       </LinearGradient>
     </Animated.View>
   );
@@ -877,8 +761,8 @@ const edc = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 5,
   },
-  card: { borderRadius: 20, padding: 12, overflow: 'hidden' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  card: { borderRadius: 20, padding: 14, overflow: 'hidden' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   iconCircle: {
     width: 34, height: 34, borderRadius: 17,
     justifyContent: 'center', alignItems: 'center',
@@ -887,16 +771,10 @@ const edc = StyleSheet.create({
   },
   title: { fontSize: 14, fontWeight: '800', color: '#111827', flex: 1 },
   titlePill: {
-    flex: 1, borderRadius: 18,
-    paddingHorizontal: 10, paddingVertical: 12,
+    flex: 1, borderRadius: 18, justifyContent: 'center',
+    paddingHorizontal: 12, height: 34,
   },
   titlePillText: { fontSize: 13, fontWeight: '800', color: '#fff', letterSpacing: 0.1 },
-  innerBox: {
-    backgroundColor: 'rgba(255,255,255,0.82)',
-    borderRadius: 14, padding: 12,
-    shadowColor: '#e88484', shadowOpacity: 0.05, shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 }, elevation: 2,
-  },
   colsRow: { flexDirection: 'row', alignItems: 'center', minHeight: 60 },
   col: { flex: 1, gap: 3 },
   colLabel: { fontSize: 10, fontWeight: '700', color: '#9CA3AF', lineHeight: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -1183,7 +1061,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18, paddingBottom: 18,
   },
   heroBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
-  heroTitle: { fontSize: 22, fontWeight: '900', color: '#fff', letterSpacing: -0.4, lineHeight: 28 },
+  heroTitle: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.4, lineHeight: 32 },
   heroShareBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: 'rgba(37,211,102,0.92)',
@@ -1229,10 +1107,6 @@ const styles = StyleSheet.create({
   resubmitText: { color: colors.primary, fontWeight: '700', fontSize: 15 },
 
   // Venue map button
-  mapBtn: { marginTop: 10, borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#6EE7B7' },
-  mapBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 7 },
-  mapBtnIconWrap: { width: 20, height: 20, borderRadius: 6, backgroundColor: 'rgba(5,150,105,0.14)', justifyContent: 'center', alignItems: 'center' },
-  mapBtnText: { fontSize: 12, fontWeight: '700', color: '#059669' },
 
   // Organizer
   organizerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
@@ -1311,22 +1185,22 @@ const styles = StyleSheet.create({
 
 
 const inf = StyleSheet.create({
-  row: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  rowInner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  row: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  rowInner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconWrap: {
-    width: 24, height: 24, borderRadius: 7,
+    width: 26, height: 26, borderRadius: 8,
     justifyContent: 'center', alignItems: 'center',
-    flexShrink: 0, marginTop: 1,
+    flexShrink: 0,
   },
-  twoRow: { flexDirection: 'row', gap: 8, marginVertical: 6 },
+  twoRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   twoCard: {
     flex: 1, backgroundColor: '#F8FAFC', borderRadius: 14,
-    padding: 10, borderWidth: 1, borderColor: '#E9ECEF',
+    padding: 12, borderWidth: 1, borderColor: '#E9ECEF',
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   label: {
     fontSize: 10, fontWeight: '700', color: '#94A3B8',
-    textTransform: 'uppercase', letterSpacing: 1.0, marginBottom: 4,
+    textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 3,
   },
   value: { fontSize: 14, color: '#111827', fontWeight: '700', lineHeight: 20 },
 });
