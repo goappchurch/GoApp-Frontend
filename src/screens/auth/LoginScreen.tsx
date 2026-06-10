@@ -57,8 +57,8 @@ export default function LoginScreen() {
               </View>
             </View>
           </View>
-          <Text style={styles.appName}>GoAppChurch</Text>
-          <Text style={styles.tagline}>Speaking & Travel Management</Text>
+          <Text style={styles.appName}>GraceLink</Text>
+          <Text style={styles.tagline}>Go and preach the Gospel</Text>
         </View>
 
         {/* Card */}
