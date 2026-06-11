@@ -84,6 +84,46 @@ const pwaTags = `
       }
     </style>`;
 
+const debugScript = `
+  <style>:root { --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); }</style>
+  <script>
+    (function () {
+      var taps = [];
+      function showDebug() {
+        var old = document.getElementById('gl-debug'); if (old) old.remove();
+        var r = document.getElementById('root');
+        var app = r && r.firstElementChild;
+        var cs = getComputedStyle(document.documentElement);
+        var d = document.createElement('div');
+        d.id = 'gl-debug';
+        d.style.cssText = 'position:fixed;top:70px;left:8px;right:8px;z-index:999999;background:rgba(0,0,0,.85);color:#0f0;font:12px/1.6 monospace;padding:10px;border-radius:10px;white-space:pre;pointer-events:none';
+        d.textContent = [
+          'innerH    ' + window.innerHeight,
+          'screenH   ' + screen.height + '  outerH ' + window.outerHeight,
+          'visualVp  ' + (window.visualViewport ? Math.round(window.visualViewport.height) : 'n/a'),
+          'htmlH     ' + Math.round(document.documentElement.getBoundingClientRect().height),
+          'bodyH     ' + Math.round(document.body.getBoundingClientRect().height),
+          'rootH     ' + (r ? Math.round(r.getBoundingClientRect().height) : 'n/a'),
+          'appH      ' + (app ? Math.round(app.getBoundingClientRect().height) : 'n/a'),
+          'inset top ' + cs.getPropertyValue('--sat') + '  bottom ' + cs.getPropertyValue('--sab'),
+          'standalone ' + (navigator.standalone || matchMedia('(display-mode: standalone)').matches),
+        ].join('\\n');
+        document.body.appendChild(d);
+        setTimeout(function(){ d.remove(); }, 15000);
+      }
+      if (location.search.indexOf('debug') !== -1) {
+        window.addEventListener('load', function(){ setTimeout(showDebug, 2000); });
+      }
+      // 5 quick taps anywhere also opens it (works in the installed app)
+      document.addEventListener('touchend', function () {
+        var now = Date.now();
+        taps = taps.filter(function(t){ return now - t < 2000; });
+        taps.push(now);
+        if (taps.length >= 5) { taps = []; showDebug(); }
+      }, true);
+    })();
+  </script>`;
+
 const swScript = `
   <script>
     if ('serviceWorker' in navigator) {
@@ -96,7 +136,7 @@ const swScript = `
   </script>`;
 
 html = html.replace('</head>', pwaTags + '\n  </head>');
-html = html.replace('</body>', swScript + '\n</body>');
+html = html.replace('</body>', debugScript + swScript + '\n</body>');
 
 fs.writeFileSync(indexPath, html);
 console.log('✓ PWA tags and service worker injected into dist/index.html');
