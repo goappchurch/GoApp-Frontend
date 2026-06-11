@@ -75,8 +75,9 @@ export default function AddEditEventScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
   const isEdit = !!route.params?.eventId;
+  const isDuplicate = !!route.params?.duplicateFromId;
 
-  const [loading, setLoading] = useState(isEdit);
+  const [loading, setLoading] = useState(isEdit || isDuplicate);
   const [saving, setSaving] = useState(false);
   const handleSaveRef = useRef<() => void>(() => {});
 
@@ -103,25 +104,29 @@ export default function AddEditEventScreen() {
       headerTintColor: '#fff',
       headerRight: () => (
         <TouchableOpacity
-          onPress={() => handleSaveRef.current()}
+          onPress={() => { if (!saving) handleSaveRef.current(); }}
+          disabled={saving}
           style={{
-            backgroundColor: 'rgba(255,255,255,0.2)',
-            borderRadius: 13,
-            width: 38,
-            height: 38,
+            backgroundColor: saving ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.2)',
+            borderRadius: 14,
+            width: 46,
+            height: 46,
             justifyContent: 'center',
             alignItems: 'center',
-            marginRight: 10,
+            marginRight: 8,
             borderWidth: 1.5,
             borderColor: 'rgba(255,255,255,0.35)',
           }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          activeOpacity={0.7}
         >
-          <Ionicons name="checkmark" size={20} color="#fff" />
+          {saving
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Ionicons name="checkmark" size={22} color="#fff" />
+          }
         </TouchableOpacity>
       ),
     });
-  }, [navigation, isEdit]);
+  }, [navigation, isEdit, saving]);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [existingEvents, setExistingEvents] = useState<{ date_start: string }[]>([]);
@@ -155,6 +160,7 @@ export default function AddEditEventScreen() {
   useEffect(() => {
     Promise.all([loadContacts(), loadExistingEvents()]);
     if (isEdit) loadEventData();
+    else if (isDuplicate) loadDuplicateData();
   }, []);
 
   const loadContacts = async () => { try { setContacts(await getContacts()); } catch (_) {} };
@@ -214,6 +220,45 @@ export default function AddEditEventScreen() {
       if (event.poster_url) setPosterUri(event.poster_url);
     } catch (e) {
       Alert.alert('Error', 'Could not load event data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDuplicateData = async () => {
+    try {
+      const event = await getEventById(route.params!.duplicateFromId!);
+      setForm({
+        title: `Copy of ${event.title}`,
+        event_type: event.event_type,
+        date_start: new Date().toISOString(),
+        timezone: event.timezone,
+        speaking_topic: event.speaking_topic,
+        expected_audience: event.expected_audience,
+        companions: event.companions ?? [],
+        venue_name: event.venue?.name,
+        venue_address: event.venue?.address,
+        venue_city: event.venue?.city,
+        venue_country: event.venue?.country,
+        venue_region: event.venue?.region,
+        organizer_name: event.organizer?.name,
+        organizer_phone: event.organizer?.phone,
+        organizer_email: event.organizer?.email,
+        contact_id: event.organizer?.contact_id,
+        // keep route prefs, clear date-specific times and tickets
+        flight_booked: event.travel?.flight_booked ?? false,
+        boarding_point: event.travel?.boarding_point,
+        deboarding_point: event.travel?.deboarding_point,
+        airline: event.travel?.airline,
+        return_flight_booked: event.travel?.return_flight_booked ?? false,
+        return_boarding_point: event.travel?.return_boarding_point,
+        return_deboarding_point: event.travel?.return_deboarding_point,
+        return_airline: event.travel?.return_airline,
+        hotel_name: event.accommodation?.hotel_name,
+        hotel_address: event.accommodation?.address,
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Could not load event data for duplication');
     } finally {
       setLoading(false);
     }
@@ -927,6 +972,17 @@ export default function AddEditEventScreen() {
 
         <View style={{ height: 48 }} />
       </ScrollView>
+
+      {/* Full-screen saving overlay — blocks all taps while saving */}
+      {saving && (
+        <View style={styles.savingOverlay}>
+          <View style={styles.savingCard}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.savingText}>Saving event…</Text>
+            <Text style={styles.savingSubText}>Please wait</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1166,6 +1222,27 @@ const styles = StyleSheet.create({
   saveBtnWrap: { marginTop: 12, borderRadius: radius.lg, overflow: 'hidden', ...shadow.lg },
   saveBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 18 },
   saveBtnText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  savingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  savingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  savingText: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
+  savingSubText: { fontSize: 13, color: colors.textSecondary },
 });
 
 // Section card styles

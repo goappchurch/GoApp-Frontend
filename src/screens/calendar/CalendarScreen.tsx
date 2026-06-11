@@ -97,7 +97,7 @@ function buildAgendaGroups(events: Event[]) {
   for (const e of events) {
     const d = new Date(e.date_start);
     const mk = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const dk = e.date_start.split('T')[0];
+    const dk = toDateStr(new Date(e.date_start));
     if (!monthMap.has(mk)) monthMap.set(mk, new Map());
     const dm = monthMap.get(mk)!;
     if (!dm.has(dk)) dm.set(dk, []);
@@ -209,8 +209,8 @@ export default function CalendarScreen() {
   const dateEventMap = useMemo(() => {
     const map: Record<string, Event[]> = {};
     for (const ev of events) {
-      const start = ev.date_start.split('T')[0];
-      const end = ev.date_end ? ev.date_end.split('T')[0] : start;
+      const start = toDateStr(new Date(ev.date_start));
+      const end = ev.date_end ? toDateStr(new Date(ev.date_end)) : start;
       let cur = start;
       while (cur <= end) {
         if (!map[cur]) map[cur] = [];
@@ -223,8 +223,8 @@ export default function CalendarScreen() {
 
   const eventsOnDay = useMemo(
     () => events.filter((e) => {
-      const start = e.date_start.split('T')[0];
-      const end = e.date_end ? e.date_end.split('T')[0] : start;
+      const start = toDateStr(new Date(e.date_start));
+      const end = e.date_end ? toDateStr(new Date(e.date_end)) : start;
       return dayInRange(selectedDate, start, end);
     }),
     [events, selectedDate],
@@ -237,8 +237,8 @@ export default function CalendarScreen() {
     const map: Record<string, Event[]> = {};
     for (const ds of weekDays) {
       map[ds] = events.filter(e => {
-        const start = e.date_start.split('T')[0];
-        const end = e.date_end ? e.date_end.split('T')[0] : start;
+        const start = toDateStr(new Date(e.date_start));
+        const end = e.date_end ? toDateStr(new Date(e.date_end)) : start;
         return dayInRange(ds, start, end);
       });
     }
@@ -248,8 +248,8 @@ export default function CalendarScreen() {
   const weekSpans = useMemo(() => {
     const raw: { startCol: number; endCol: number; isEventStart: boolean; isEventEnd: boolean }[] = [];
     for (const ev of events) {
-      const evStart = ev.date_start.split('T')[0];
-      const evEnd = ev.date_end ? ev.date_end.split('T')[0] : evStart;
+      const evStart = toDateStr(new Date(ev.date_start));
+      const evEnd = ev.date_end ? toDateStr(new Date(ev.date_end)) : evStart;
       if (evStart === evEnd) continue;
       if (evStart > weekDays[6] || evEnd < weekDays[0]) continue;
 
@@ -300,8 +300,8 @@ export default function CalendarScreen() {
       const spans: SpanInfo[] = [];
 
       for (const ev of events) {
-        const evStart = ev.date_start.split('T')[0];
-        const evEnd = ev.date_end ? ev.date_end.split('T')[0] : evStart;
+        const evStart = toDateStr(new Date(ev.date_start));
+        const evEnd = ev.date_end ? toDateStr(new Date(ev.date_end)) : evStart;
         if (evStart === evEnd) continue;
         if (evStart > rowEnd || evEnd < rowStart) continue;
 

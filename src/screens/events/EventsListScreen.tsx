@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -50,6 +51,7 @@ export default function EventsListScreen() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [menuEvent, setMenuEvent] = useState<Event | null>(null);
 
   const [search, setSearch] = useState('');
   const [timeFilters, setTimeFilters] = useState<string[]>(['upcoming']);
@@ -82,6 +84,11 @@ export default function EventsListScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { setLoading(true); loadData(); }, [loadData]));
+
+  const handleDuplicate = useCallback((event: Event) => {
+    setMenuEvent(null);
+    navigation.navigate('AddEditEvent', { duplicateFromId: event.id });
+  }, [navigation]);
 
   const startOfToday = useMemo(() => {
     const d = new Date();
@@ -289,6 +296,7 @@ export default function EventsListScreen() {
               event={item}
               now={startOfToday}
               onPress={() => navigation.navigate('EventDetail', { eventId: item.id })}
+              onMenuOpen={isAssistant ? () => setMenuEvent(item) : undefined}
             />
           )}
           renderSectionHeader={({ section }) => (
@@ -340,6 +348,34 @@ export default function EventsListScreen() {
           <Ionicons name="add" size={26} color="#fff" />
         </TouchableOpacity>
       )}
+
+      {/* ── Three-dot event menu ── */}
+      <Modal visible={!!menuEvent} transparent animationType="fade" onRequestClose={() => setMenuEvent(null)}>
+        <TouchableOpacity style={menuStyles.backdrop} activeOpacity={1} onPress={() => setMenuEvent(null)} />
+        <View style={menuStyles.sheet}>
+          <View style={menuStyles.handle} />
+          <Text style={menuStyles.eventTitle} numberOfLines={2}>{menuEvent?.title}</Text>
+          <View style={menuStyles.divider} />
+          <TouchableOpacity
+            style={menuStyles.option}
+            onPress={() => menuEvent && handleDuplicate(menuEvent)}
+            activeOpacity={0.75}
+          >
+            <View style={menuStyles.optionIcon}>
+              <Ionicons name="copy-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={menuStyles.optionLabel}>Duplicate Event</Text>
+              <Text style={menuStyles.optionSub}>Create a copy to reuse on a different date</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={menuStyles.cancelBtn} onPress={() => setMenuEvent(null)} activeOpacity={0.75}>
+            <Text style={menuStyles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -360,10 +396,12 @@ function EventCard({
   event,
   now,
   onPress,
+  onMenuOpen,
 }: {
   event: Event;
   now: Date;
   onPress: () => void;
+  onMenuOpen?: () => void;
 }) {
   const { day, month } = dateBlock(event.date_start);
   const isPast = new Date(event.date_start) < now;
@@ -456,7 +494,16 @@ function EventCard({
         </View>
       )}
 
-      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
+      {onMenuOpen && (
+        <TouchableOpacity
+          onPress={(e) => { e.stopPropagation?.(); onMenuOpen(); }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.6}
+          style={styles.threeDot}
+        >
+          <Ionicons name="ellipsis-vertical" size={18} color={colors.textTertiary} />
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 }
@@ -612,6 +659,9 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, flex: 1 },
   textPast: { color: colors.textSecondary },
 
+  threeDot: {
+    padding: 4,
+  },
   countdownBadge: {
     borderRadius: radius.md,
     paddingHorizontal: 10,
@@ -677,4 +727,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+});
+
+const menuStyles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 34,
+    paddingTop: 12,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  eventTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginBottom: 12,
+  },
+  divider: { height: 1, backgroundColor: colors.border, marginBottom: 8 },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+  },
+  optionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionLabel: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  optionSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  cancelBtn: {
+    marginTop: 8,
+    borderRadius: radius.lg,
+    backgroundColor: colors.border,
+    padding: 14,
+    alignItems: 'center',
+  },
+  cancelText: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
 });

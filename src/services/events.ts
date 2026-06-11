@@ -240,6 +240,43 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
   return getEventById(id);
 }
 
+export async function duplicateEvent(event: Event, userId: string): Promise<Event> {
+  const formData: EventFormData = {
+    title: `Copy of ${event.title}`,
+    event_type: event.event_type,
+    date_start: event.date_start,
+    date_end: event.date_end,
+    timezone: event.timezone,
+    speaking_topic: event.speaking_topic,
+    expected_audience: event.expected_audience,
+    companions: event.companions,
+    // venue — copy everything
+    venue_name: event.venue?.name,
+    venue_address: event.venue?.address,
+    venue_city: event.venue?.city,
+    venue_country: event.venue?.country,
+    venue_region: event.venue?.region,
+    // organizer — copy contact info
+    organizer_name: event.organizer?.name,
+    organizer_phone: event.organizer?.phone,
+    organizer_email: event.organizer?.email,
+    contact_id: event.organizer?.contact_id,
+    // travel — keep route prefs, clear date-specific times & tickets
+    flight_booked: event.travel?.flight_booked ?? false,
+    boarding_point: event.travel?.boarding_point,
+    deboarding_point: event.travel?.deboarding_point,
+    airline: event.travel?.airline,
+    return_flight_booked: event.travel?.return_flight_booked ?? false,
+    return_boarding_point: event.travel?.return_boarding_point,
+    return_deboarding_point: event.travel?.return_deboarding_point,
+    return_airline: event.travel?.return_airline,
+    // accommodation — keep hotel info, clear dates
+    hotel_name: event.accommodation?.hotel_name,
+    hotel_address: event.accommodation?.address,
+  };
+  return createEvent(formData, userId);
+}
+
 export async function deleteEvent(id: string): Promise<void> {
   // Delete child records first (foreign key constraints)
   await Promise.all([

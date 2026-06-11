@@ -40,7 +40,7 @@ export type RootStackParamList = {
   Auth: undefined;
   Main: NavigatorScreenParams<MainTabParamList> | undefined;
   EventDetail: { eventId: string };
-  AddEditEvent: { eventId?: string; defaultDate?: string } | undefined;
+  AddEditEvent: { eventId?: string; defaultDate?: string; duplicateFromId?: string } | undefined;
   Notifications: undefined;
   ContactDetail: { contactId?: string };
 };
