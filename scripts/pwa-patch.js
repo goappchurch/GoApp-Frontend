@@ -46,14 +46,14 @@ const pwaTags = `
     <style>
       * { -webkit-text-size-adjust: 100%; touch-action: manipulation; box-sizing: border-box; }
 
-      /* Fix viewport height so bottom tab bar is never cut off */
+      /* Fix viewport height so bottom tab bar is never cut off.
+         NOTE: never use -webkit-fill-available on html — it computes to 0
+         on desktop Safari and collapses #root to 0px (white screen). */
       html {
         height: 100%;
-        height: -webkit-fill-available;
       }
       body {
         height: 100%;
-        min-height: -webkit-fill-available;
         overscroll-behavior: none;
         -webkit-overflow-scrolling: touch;
         /* Push content above iOS home indicator / Android nav bar */
@@ -63,6 +63,10 @@ const pwaTags = `
         height: 100%;
         display: flex;
         flex-direction: column;
+      }
+      /* dvh tracks the dynamic toolbar on mobile Safari/Chrome */
+      @supports (height: 100dvh) {
+        body { height: 100dvh; }
       }
 
       /* Remove ugly browser focus ring on all inputs */
