@@ -56,17 +56,20 @@ const pwaTags = `
         height: 100%;
         overscroll-behavior: none;
         -webkit-overflow-scrolling: touch;
-        /* Push content above iOS home indicator / Android nav bar */
-        padding-bottom: env(safe-area-inset-bottom, 0px);
       }
       #root {
         height: 100%;
         display: flex;
         flex-direction: column;
       }
-      /* dvh tracks the dynamic toolbar on mobile Safari/Chrome */
+      /* dvh tracks the dynamic toolbar when running inside the Safari/Chrome browser */
       @supports (height: 100dvh) {
         body { height: 100dvh; }
+      }
+      /* Installed PWA: no browser toolbar — plain 100% matches the real screen.
+         Safe-area insets are handled inside the app via SafeAreaProvider. */
+      @media (display-mode: standalone) {
+        body { height: 100%; }
       }
 
       /* Remove ugly browser focus ring on all inputs */
