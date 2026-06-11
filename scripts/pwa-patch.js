@@ -66,10 +66,11 @@ const pwaTags = `
       @supports (height: 100dvh) {
         body { height: 100dvh; }
       }
-      /* Installed PWA: no browser toolbar — plain 100% matches the real screen.
-         Safe-area insets are handled inside the app via SafeAreaProvider. */
+      /* Installed PWA: no browser toolbar. iOS 26 has a cold-start bug where
+         the viewport (innerHeight/dvh/%) is stale and too small until a
+         geometry change — but 100vh reports the true screen height, so use it. */
       @media (display-mode: standalone) {
-        body { height: 100%; }
+        html, body { height: 100vh; }
       }
 
       /* Remove ugly browser focus ring on all inputs */
