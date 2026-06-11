@@ -4,7 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/contexts/AuthContext';
-import AnimatedSplash from './src/components/AnimatedSplash';
+// Splash animation disabled for now — suspected cause of iOS Safari issues
+// import AnimatedSplash from './src/components/AnimatedSplash';
 import ErrorBoundary from './src/components/ErrorBoundary';
 
 const queryClient = new QueryClient({
@@ -23,9 +24,9 @@ export default function App() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <StatusBar style="auto" />
-            <AnimatedSplash>
-              <AppNavigator />
-            </AnimatedSplash>
+            {/* <AnimatedSplash> */}
+            <AppNavigator />
+            {/* </AnimatedSplash> */}
           </AuthProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
