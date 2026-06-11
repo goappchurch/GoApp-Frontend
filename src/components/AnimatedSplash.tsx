@@ -57,7 +57,7 @@ export default function AnimatedSplash({ children }: { children: React.ReactNode
 
       {show && (
         <Animated.View
-          style={[StyleSheet.absoluteFillObject, { opacity: overlayOpacity, backgroundColor: BG }]}
+          style={[StyleSheet.absoluteFillObject, styles.center, { opacity: overlayOpacity, backgroundColor: BG }]}
           pointerEvents="none"
         >
           {/* Explicit width/height — absoluteFillObject on LinearGradient is unreliable on mobile web */}

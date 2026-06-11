@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import { AuthProvider } from './src/contexts/AuthContext';
 import AnimatedSplash from './src/components/AnimatedSplash';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,15 +18,17 @@ const queryClient = new QueryClient({
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <StatusBar style="auto" />
-          <AnimatedSplash>
-            <AppNavigator />
-          </AnimatedSplash>
-        </AuthProvider>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <StatusBar style="auto" />
+            <AnimatedSplash>
+              <AppNavigator />
+            </AnimatedSplash>
+          </AuthProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
