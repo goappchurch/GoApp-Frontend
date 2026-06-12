@@ -222,7 +222,7 @@ function DetailRow({ icon, label, value, valueColor }: { icon: keyof typeof Ioni
   );
 }
 
-function FlightDetailModal({
+export function FlightDetailModal({
   event,
   onClose,
   onViewEvent,

@@ -9,6 +9,7 @@ import {
   Dimensions,
   Modal,
   Image,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../contexts/AuthContext';
 import { getEventsByMonth, getUpcomingEvents } from '../../services/events';
+import { FlightDetailModal } from '../flights/FlightsScreen';
 import { Event } from '../../types';
 import { eventTypeIcons, colors } from '../../constants/theme';
 import { getLoadingVerse } from '../../constants/verses';
@@ -33,6 +35,11 @@ type SpanInfo = {
   endCol: number;
   isEventStart: boolean;
   isEventEnd: boolean;
+};
+
+type FlightInfo = {
+  event: Event;
+  leg: 'outbound' | 'return';
 };
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
@@ -140,11 +147,32 @@ export default function CalendarScreen() {
   const [agendaEvents, setAgendaEvents] = useState<Event[]>([]);
   const [popupDate, setPopupDate] = useState<string | null>(null);
   const [popupEvents, setPopupEvents] = useState<Event[]>([]);
+  const [popupFlights, setPopupFlights] = useState<FlightInfo[]>([]);
+  const [flightDetailEvent, setFlightDetailEvent] = useState<Event | null>(null);
+
+  // Per-month event cache — keyed by "YYYY-M". Populated on first fetch,
+  // served instantly on revisit so green backgrounds appear with zero lag.
+  const eventsCache = useRef<Record<string, Event[]>>({});
 
   const loadMonth = useCallback(async (year: number, month: number, isPage = false) => {
+    const key = `${year}-${month}`;
+    const cached = eventsCache.current[key];
+    if (cached) {
+      // Serve cache immediately — no spinner, no lag
+      setEvents(cached);
+      setPageLoading(false);
+      // Silently refresh in the background
+      getEventsByMonth(year, month)
+        .then(fresh => { eventsCache.current[key] = fresh; setEvents(fresh); })
+        .catch(() => {});
+      return;
+    }
+    // No cache yet — show loader only on very first open
     isPage ? setPageLoading(true) : setEventsLoading(true);
     try {
-      setEvents(await getEventsByMonth(year, month));
+      const data = await getEventsByMonth(year, month);
+      eventsCache.current[key] = data;
+      setEvents(data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -216,6 +244,25 @@ export default function CalendarScreen() {
         if (!map[cur]) map[cur] = [];
         map[cur].push(ev);
         cur = addDays(cur, 1);
+      }
+    }
+    return map;
+  }, [events]);
+
+  const dateFlightMap = useMemo(() => {
+    const map: Record<string, FlightInfo[]> = {};
+    for (const ev of events) {
+      const t = ev.travel;
+      if (!t) continue;
+      if (t.flight_booked && t.departure_time) {
+        const ds = toDateStr(new Date(t.departure_time));
+        if (!map[ds]) map[ds] = [];
+        map[ds].push({ event: ev, leg: 'outbound' });
+      }
+      if (t.return_flight_booked && t.return_departure_time) {
+        const ds = toDateStr(new Date(t.return_departure_time));
+        if (!map[ds]) map[ds] = [];
+        map[ds].push({ event: ev, leg: 'return' });
       }
     }
     return map;
@@ -349,7 +396,7 @@ export default function CalendarScreen() {
     return (
       <LinearGradient
         colors={[colors.primaryDarker, colors.primary]}
-        locations={[0, 0.15, 0.40, 0.68, 1]}
+        locations={[0, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 }}
@@ -365,7 +412,7 @@ export default function CalendarScreen() {
   return (
     <LinearGradient
       colors={[colors.primaryDarker, colors.primary]}
-      locations={[0, 0.15, 0.40, 0.68, 1]}
+      locations={[0, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{ flex: 1 }}
@@ -551,9 +598,11 @@ export default function CalendarScreen() {
                         const ds = `${currentMonth.year}-${String(currentMonth.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                         const isSelected = ds === selectedDate;
                         const dayEvts = dateEventMap[ds] ?? [];
+                        const dayFlights = dateFlightMap[ds] ?? [];
                         // Any event on this day → show green capsule,
                         // unless already covered by a multi-day span bar
                         const hasEvent = dayEvts.length > 0;
+                        const hasFlight = dayFlights.length > 0;
 
                         return (
                           <TouchableOpacity
@@ -561,9 +610,10 @@ export default function CalendarScreen() {
                             style={styles.calCell}
                             onPress={() => {
                               setSelectedDate(ds);
-                              if (dayEvts.length > 0) {
+                              if (dayEvts.length > 0 || dayFlights.length > 0) {
                                 setPopupDate(ds);
                                 setPopupEvents(dayEvts);
+                                setPopupFlights(dayFlights);
                               } else {
                                 handleDoubleTap(ds, false);
                               }
@@ -571,18 +621,23 @@ export default function CalendarScreen() {
                             activeOpacity={0.7}
                           >
                             {spanBg}
-                            {isSelected ? (
+                            {hasFlight && (
+                              <View style={styles.flightBadge} pointerEvents="none">
+                                <Ionicons name="airplane" size={8} color="#fff" />
+                              </View>
+                            )}
+                            {hasEvent && !isInSpan ? (
                               <LinearGradient
-                                colors={[colors.primary, colors.primaryDark]}
+                                colors={['#22C55E', '#16A34A']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
-                                style={styles.calDayCapsule}
+                                style={[styles.calDayCapsule, isSelected && styles.calDayCapsuleSelected]}
                               >
                                 <Text style={styles.calDayTextBright}>{day}</Text>
                               </LinearGradient>
-                            ) : hasEvent && !isInSpan ? (
+                            ) : isSelected ? (
                               <LinearGradient
-                                colors={['#22C55E', '#16A34A']}
+                                colors={[colors.primary, colors.primaryDark]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={styles.calDayCapsule}
@@ -641,6 +696,7 @@ export default function CalendarScreen() {
                     const d = new Date(ds + 'T00:00:00');
                     const isSelected = ds === selectedDate;
                     const dayEvts = weekEventMap[ds] ?? [];
+                    const dayFlights = dateFlightMap[ds] ?? [];
 
                     const spanForCol = weekSpans.find(s => ci >= s.startCol && ci <= s.endCol);
                     const isInSpan = !!spanForCol;
@@ -653,7 +709,13 @@ export default function CalendarScreen() {
                         style={styles.weekDayCol}
                         onPress={() => {
                           setSelectedDate(ds);
-                          handleDoubleTap(ds, dayEvts.length > 0);
+                          if (dayEvts.length > 0 || dayFlights.length > 0) {
+                            setPopupDate(ds);
+                            setPopupEvents(dayEvts);
+                            setPopupFlights(dayFlights);
+                          } else {
+                            handleDoubleTap(ds, false);
+                          }
                         }}
                         activeOpacity={0.75}
                       >
@@ -661,6 +723,11 @@ export default function CalendarScreen() {
                           {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
                         </Text>
                         <View style={styles.weekCircleWrap}>
+                          {dayFlights.length > 0 && (
+                            <View style={styles.flightBadgeWeek} pointerEvents="none">
+                              <Ionicons name="airplane" size={8} color="#fff" />
+                            </View>
+                          )}
                           {isInSpan && (
                             <View
                               pointerEvents="none"
@@ -800,14 +867,28 @@ export default function CalendarScreen() {
             </LinearGradient>
           </TouchableOpacity>
         )}
+        <FlightDetailModal
+          event={flightDetailEvent}
+          onClose={() => setFlightDetailEvent(null)}
+          onViewEvent={() => {
+            const id = flightDetailEvent!.id;
+            setFlightDetailEvent(null);
+            navigation.navigate('EventDetail', { eventId: id });
+          }}
+        />
         <DatePopupModal
           visible={popupDate !== null}
           dateStr={popupDate ?? ''}
           events={popupEvents}
+          flights={popupFlights}
           onClose={() => setPopupDate(null)}
           onEventPress={(id) => {
             setPopupDate(null);
             navigation.navigate('EventDetail', { eventId: id });
+          }}
+          onFlightPress={(event) => {
+            setPopupDate(null);
+            setFlightDetailEvent(event);
           }}
         />
       </SafeAreaView>
@@ -926,18 +1007,21 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 function DatePopupModal({
-  visible, dateStr, events, onClose, onEventPress,
+  visible, dateStr, events, flights, onClose, onEventPress, onFlightPress,
 }: {
   visible: boolean;
   dateStr: string;
   events: Event[];
+  flights: FlightInfo[];
   onClose: () => void;
   onEventPress: (id: string) => void;
+  onFlightPress: (event: Event) => void;
 }) {
   const [currentPage, setCurrentPage] = useState(0);
   const [fullPosterUrl, setFullPosterUrl] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const cardWidth = SCREEN_W - 48;
+  const totalPages = events.length + flights.length;
 
   useEffect(() => {
     if (visible) {
@@ -980,10 +1064,10 @@ function DatePopupModal({
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              {events.length > 1 && (
+              {totalPages > 1 && (
                 <View style={popupStyles.pageCounter}>
                   <Text style={popupStyles.pageCounterText}>
-                    {currentPage + 1} / {events.length}
+                    {currentPage + 1} / {totalPages}
                   </Text>
                 </View>
               )}
@@ -1090,12 +1174,122 @@ function DatePopupModal({
                 </View>
               );
             })}
+
+            {/* ── Flight pages ── */}
+            {flights.map((fi) => {
+              const t = fi.event.travel!;
+              const isReturn = fi.leg === 'return';
+              const boarding = isReturn ? t.return_boarding_point : t.boarding_point;
+              const deboarding = isReturn ? t.return_deboarding_point : t.deboarding_point;
+              const flightNo = isReturn ? t.return_flight_number : t.flight_number;
+              const airline = isReturn ? t.return_airline : t.airline;
+              const depTime = isReturn ? t.return_departure_time : t.departure_time;
+              const arrTime = isReturn ? t.return_arrival_time : t.arrival_time;
+              const checkinTime = isReturn ? t.return_checkin_time : t.checkin_time;
+              const ticketUrl = isReturn ? t.return_ticket_pdf_url : t.flight_ticket_url;
+              const accent = isReturn ? '#34D399' : '#A5B4FC';
+              return (
+                <View
+                  key={`${fi.event.id}-${fi.leg}`}
+                  style={{ width: cardWidth, scrollSnapAlign: 'start', scrollSnapStop: 'always' } as any}
+                >
+                  {/* Compact flight banner */}
+                  <LinearGradient
+                    colors={isReturn ? ['#065F46', '#022C22'] : ['#1E3A8A', '#172554']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={popupStyles.flightBanner}
+                  >
+                    <Ionicons
+                      name="airplane"
+                      size={90}
+                      color="rgba(255,255,255,0.07)"
+                      style={{ position: 'absolute', right: -10, bottom: -18, transform: [{ rotate: '-20deg' }] }}
+                    />
+                    <View style={[popupStyles.flightLegTag, { borderColor: accent, alignSelf: 'flex-start' }]}>
+                      <Ionicons name="airplane" size={10} color={accent} />
+                      <Text style={[popupStyles.flightLegTagText, { color: accent }]}>
+                        {isReturn ? 'RETURN FLIGHT' : 'OUTBOUND FLIGHT'}
+                      </Text>
+                    </View>
+                    <View style={popupStyles.flightRouteRow}>
+                      <Text style={popupStyles.flightRouteCity} numberOfLines={1}>{boarding ?? '—'}</Text>
+                      <Ionicons name="airplane" size={15} color={accent} style={{ marginHorizontal: 6 }} />
+                      <Text style={[popupStyles.flightRouteCity, { textAlign: 'right' }]} numberOfLines={1}>
+                        {deboarding ?? '—'}
+                      </Text>
+                    </View>
+                    <Text style={popupStyles.flightEventTitle} numberOfLines={1}>{fi.event.title}</Text>
+                  </LinearGradient>
+
+                  {/* Compact 2-column details */}
+                  <View style={popupStyles.flightInfoSection}>
+                    <View style={popupStyles.flightGrid}>
+                      {depTime && (
+                        <View style={popupStyles.flightGridCell}>
+                          <Text style={popupStyles.flightGridLabel}>DEPARTS</Text>
+                          <Text style={[popupStyles.flightGridValue, { color: accent }]}>{formatTime(depTime)}</Text>
+                        </View>
+                      )}
+                      {arrTime && (
+                        <View style={popupStyles.flightGridCell}>
+                          <Text style={popupStyles.flightGridLabel}>ARRIVES</Text>
+                          <Text style={[popupStyles.flightGridValue, { color: accent }]}>{formatTime(arrTime)}</Text>
+                        </View>
+                      )}
+                      {(flightNo || airline) && (
+                        <View style={popupStyles.flightGridCell}>
+                          <Text style={popupStyles.flightGridLabel}>FLIGHT</Text>
+                          <Text style={popupStyles.flightGridValue} numberOfLines={1}>
+                            {[flightNo, airline].filter(Boolean).join(' · ')}
+                          </Text>
+                        </View>
+                      )}
+                      {checkinTime && (
+                        <View style={popupStyles.flightGridCell}>
+                          <Text style={popupStyles.flightGridLabel}>CHECK-IN</Text>
+                          <Text style={popupStyles.flightGridValue}>{formatTime(checkinTime)}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {ticketUrl && (
+                      <TouchableOpacity
+                        style={[popupStyles.flightTicketBtn, { borderColor: accent }]}
+                        onPress={() => Linking.openURL(ticketUrl)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="document-text-outline" size={14} color={accent} />
+                        <Text style={[popupStyles.flightActionBtnText, { color: accent }]}>View Ticket</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      style={[popupStyles.flightActionBtn, popupStyles.flightActionBtnPrimary]}
+                      onPress={() => onFlightPress(fi.event)}
+                      activeOpacity={0.8}
+                    >
+                      <LinearGradient
+                        colors={isReturn ? ['#059669', '#16A34A'] : ['#2563EB', '#1E40AF']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={popupStyles.flightActionBtnGrad}
+                      >
+                        <Ionicons name="airplane-outline" size={14} color="#fff" />
+                        <Text style={popupStyles.openBtnText}>Open Flight Details</Text>
+                        <Ionicons name="arrow-forward" size={14} color="#fff" />
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
           </ScrollView>
 
           {/* ── Pagination dots ── */}
-          {events.length > 1 && (
+          {totalPages > 1 && (
             <View style={popupStyles.dotsRow}>
-              {events.map((_, i) => (
+              {Array.from({ length: totalPages }).map((_, i) => (
                 <View
                   key={i}
                   style={[popupStyles.dot, i === currentPage && popupStyles.dotActive]}
@@ -1318,6 +1512,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  calDayCapsuleSelected: {
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
   calDayNormal: {
     width: CELL_SIZE - 8,
     height: CELL_SIZE - 10,
@@ -1332,6 +1530,37 @@ const styles = StyleSheet.create({
   },
   calDayTextHasEvent: { color: '#111827', fontWeight: '800' },
   calDayTextBright: { fontSize: 14, fontWeight: '800', color: '#fff' },
+
+  // Flight indicator badge on date cells
+  flightBadge: {
+    position: 'absolute',
+    top: -1,
+    right: 2,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: '#2563EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    zIndex: 3,
+  },
+  flightBadgeWeek: {
+    position: 'absolute',
+    top: -4,
+    right: '50%',
+    marginRight: -22,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: '#2563EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    zIndex: 3,
+  },
 
   // Stats
   statsRow: {
@@ -1734,6 +1963,118 @@ const popupStyles = StyleSheet.create({
     alignItems: 'center',
   },
   metaText: { fontSize: 13, color: 'rgba(255,255,255,0.65)', flex: 1 },
+  flightBanner: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 16,
+    gap: 8,
+    overflow: 'hidden',
+  },
+  flightEventTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 0.2,
+  },
+  flightLegTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  flightLegTagText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  flightRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  flightRouteCity: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.3,
+  },
+  flightInfoSection: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  flightGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  flightGridCell: {
+    width: '47%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  flightGridLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 1,
+    marginBottom: 3,
+  },
+  flightGridValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: -0.2,
+  },
+  flightActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'stretch',
+  },
+  flightTicketBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  flightActionBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  flightActionBtnPrimary: {
+    borderWidth: 0,
+    padding: 0,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+  },
+  flightActionBtnGrad: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  flightActionBtnText: { fontSize: 13, fontWeight: '700' },
   openBtn: { borderRadius: 16, overflow: 'hidden', marginTop: 4 },
   openBtnGrad: {
     flexDirection: 'row',

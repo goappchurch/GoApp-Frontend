@@ -30,6 +30,9 @@ import {
 } from '../../services/events';
 import { Event, Note, Task } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as Clipboard from 'expo-clipboard';
 import { colors, shadow, radius, eventTypeLabels } from '../../constants/theme';
 import { getLoadingVerse } from '../../constants/verses';
 
@@ -49,6 +52,8 @@ export default function EventDetailScreen() {
   const [noteText, setNoteText] = useState('');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [showPoster, setShowPoster] = useState(false);
+  const [sharingPoster, setSharingPoster] = useState(false);
+  const [sharingCombined, setSharingCombined] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -198,26 +203,168 @@ export default function EventDetailScreen() {
     setTasks(await getTasks(event!.id));
   };
 
-  const handleWhatsAppShare = () => {
-    if (!event) return;
+  // ── Shared helper ────────────────────────────────────────────────────────
+  const getPosterAsset = async (): Promise<{ localUri?: string; file?: File } | null> => {
+    if (!event?.poster_url) return null;
+    try {
+      if (Platform.OS === 'web') {
+        const res = await fetch(event.poster_url, { mode: 'cors' });
+        const blob = await res.blob();
+        const ext = blob.type.includes('png') ? 'png' : 'jpg';
+        return { file: new File([blob], `${event.title}.${ext}`, { type: blob.type }) };
+      } else {
+        const ext = event.poster_url.split('?')[0].toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+        const localUri = `${FileSystem.cacheDirectory}poster_${event.id}.${ext}`;
+        const { uri } = await FileSystem.downloadAsync(event.poster_url, localUri);
+        return { localUri: uri };
+      }
+    } catch {
+      return null;
+    }
+  };
+
+  // ── Button 1: Poster only ────────────────────────────────────────────────
+  const handleSharePoster = async () => {
+    if (!event?.poster_url) return;
+    setSharingPoster(true);
+    try {
+      const nav = navigator as any;
+      const asset = await getPosterAsset();
+      if (Platform.OS === 'web') {
+        if (asset?.file && nav.canShare?.({ files: [asset.file] })) {
+          await nav.share({ files: [asset.file], title: event.title });
+        } else if (nav.share) {
+          await nav.share({ title: event.title, url: event.poster_url });
+        } else {
+          window.open(event.poster_url, '_blank');
+        }
+      } else if (asset?.localUri && await Sharing.isAvailableAsync()) {
+        const ext = asset.localUri.endsWith('.png') ? 'png' : 'jpg';
+        await Sharing.shareAsync(asset.localUri, { mimeType: `image/${ext}`, dialogTitle: event.title });
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') Alert.alert('Could not share poster', 'Try opening it and sharing from there.');
+    } finally {
+      setSharingPoster(false);
+    }
+  };
+
+  const buildShareMessage = () => {
+    if (!event) return '';
     const v = event.venue;
     const t = event.travel;
     const a = event.accommodation;
     const o = event.organizer;
-    const msg = [
-      `📅 *${event.title}*`,
-      `🗓 Date: ${fmt(event.date_start)}`,
-      v ? `📍 Venue: ${v.name ?? ''}, ${v.city ?? ''}, ${v.country ?? ''}` : null,
-      t?.flight_booked && t.flight_number ? `✈️ Flight: ${t.flight_number} | ${t.airline ?? ''}` : null,
-      t?.departure_time ? `   Departure: ${fmt(t.departure_time)} → Arrival: ${fmt(t.arrival_time ?? '')}` : null,
-      a?.hotel_name ? `🏨 Hotel: ${a.hotel_name}` : null,
-      a?.check_in ? `   Check-in: ${a.check_in} | Check-out: ${a.check_out ?? ''}` : null,
-      o?.name ? `👤 Organizer: ${o.name}` : null,
-      o?.phone ? `   📞 ${o.phone}` : null,
-      event.speaking_topic ? `📖 Topic: ${event.speaking_topic}` : null,
-    ].filter(Boolean).join('\n');
-    Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
+
+    const fmtD = (iso: string) => iso
+      ? new Date(iso).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
+      : '';
+    const fmtT = (iso: string) => iso
+      ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+      : '';
+
+    const lines: string[] = [];
+
+    lines.push(`✨ *${event.title}*`);
+    lines.push('');
+
+    lines.push(`📅  ${fmtD(event.date_start)}${event.date_end ? `  →  ${fmtD(event.date_end)}` : ''}`);
+    lines.push(`🕐  ${fmtT(event.date_start)}`);
+
+    if (v?.name || v?.city) {
+      lines.push('');
+      const venueLine = [v.name, v.city, v.country].filter(Boolean).join(', ');
+      lines.push(`📍  ${venueLine}`);
+    }
+
+    if (event.speaking_topic) {
+      lines.push('');
+      lines.push(`🎙  *Topic:* ${event.speaking_topic}`);
+    }
+
+    if (t?.flight_booked) {
+      lines.push('');
+      lines.push(`✈️  *Outbound Flight*`);
+      if (t.boarding_point || t.deboarding_point)
+        lines.push(`     ${t.boarding_point ?? '—'}  →  ${t.deboarding_point ?? '—'}`);
+      if (t.flight_number || t.airline)
+        lines.push(`     ${[t.flight_number, t.airline].filter(Boolean).join(' · ')}`);
+      if (t.departure_time)
+        lines.push(`     Dep: ${fmtT(t.departure_time)}${t.arrival_time ? `  |  Arr: ${fmtT(t.arrival_time)}` : ''}`);
+    }
+
+    if (t?.return_flight_booked) {
+      lines.push('');
+      lines.push(`🔁  *Return Flight*`);
+      if (t.return_boarding_point || t.return_deboarding_point)
+        lines.push(`     ${t.return_boarding_point ?? '—'}  →  ${t.return_deboarding_point ?? '—'}`);
+      if (t.return_flight_number || t.return_airline)
+        lines.push(`     ${[t.return_flight_number, t.return_airline].filter(Boolean).join(' · ')}`);
+      if (t.return_departure_time)
+        lines.push(`     Dep: ${fmtT(t.return_departure_time)}${t.return_arrival_time ? `  |  Arr: ${fmtT(t.return_arrival_time)}` : ''}`);
+    }
+
+    if (a?.hotel_name) {
+      lines.push('');
+      lines.push(`🏨  *${a.hotel_name}*`);
+      if (a.address) lines.push(`     ${a.address}`);
+      if (a.check_in) lines.push(`     Check-in: ${fmtD(a.check_in)}${a.check_out ? `  |  Check-out: ${fmtD(a.check_out)}` : ''}`);
+    }
+
+    if (o?.name) {
+      lines.push('');
+      lines.push(`👤  *${o.name}*`);
+      if (o.phone) lines.push(`     📞 ${o.phone}`);
+      if (o.email) lines.push(`     ✉️ ${o.email}`);
+    }
+
+    return lines.join('\n');
   };
+
+  // ── Button 2: Poster + event details ────────────────────────────────────
+  const handleShareCombined = async () => {
+    if (!event) return;
+    const msg = buildShareMessage();
+    setSharingCombined(true);
+    try {
+      const nav = navigator as any;
+      const asset = event.poster_url ? await getPosterAsset() : null;
+
+      if (Platform.OS === 'web') {
+        if (asset?.file && nav.canShare?.({ files: [asset.file] })) {
+          await nav.share({ files: [asset.file], text: msg, title: event.title });
+        } else if (nav.share) {
+          await nav.share({ title: event.title, text: msg, url: event.poster_url ?? undefined });
+        } else {
+          if (event.poster_url) window.open(event.poster_url, '_blank');
+          Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
+        }
+      } else {
+        if (asset?.localUri && await Sharing.isAvailableAsync()) {
+          // Copy text to clipboard so user can paste as caption in WhatsApp
+          await Clipboard.setStringAsync(msg);
+          const ext = asset.localUri.endsWith('.png') ? 'png' : 'jpg';
+          Alert.alert(
+            'Details Copied ✓',
+            'Event details copied to clipboard. Pick WhatsApp in the share sheet and paste as caption.',
+            [{ text: 'Continue', onPress: () =>
+              Sharing.shareAsync(asset.localUri!, { mimeType: `image/${ext}`, dialogTitle: event.title })
+            }],
+          );
+        } else {
+          Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
+        }
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
+      }
+    } finally {
+      setSharingCombined(false);
+    }
+  };
+
+  const handleWhatsAppShare = handleShareCombined;
 
 
   if (loading || !event) {
@@ -327,9 +474,19 @@ export default function EventDetailScreen() {
           >
             <View style={styles.heroBottom}>
               <Text style={[styles.heroTitle, { flex: 1 }]} numberOfLines={3}>{event.title}</Text>
-              <TouchableOpacity style={styles.heroShareBtn} onPress={handleWhatsAppShare} activeOpacity={0.85}>
-                <Ionicons name="logo-whatsapp" size={15} color="#fff" />
-                <Text style={styles.heroShareText}>Share</Text>
+              {event.poster_url && (
+                <TouchableOpacity style={styles.heroPosterShareBtn} onPress={handleSharePoster} activeOpacity={0.85} disabled={sharingPoster}>
+                  {sharingPoster
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <><Ionicons name="image-outline" size={15} color="#fff" /><Text style={styles.heroShareText}>Poster</Text></>
+                  }
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.heroShareBtn} onPress={handleShareCombined} activeOpacity={0.85} disabled={sharingCombined}>
+                {sharingCombined
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <><Ionicons name="logo-whatsapp" size={15} color="#fff" /><Text style={styles.heroShareText}>Share</Text></>
+                }
               </TouchableOpacity>
             </View>
           </LinearGradient>
@@ -1073,6 +1230,13 @@ const styles = StyleSheet.create({
   },
   heroBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
   heroTitle: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.4, lineHeight: 32 },
+  heroPosterShareBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(99,102,241,0.88)',
+    borderRadius: radius.full, paddingHorizontal: 12, paddingVertical: 8,
+    flexShrink: 0,
+    minWidth: 72, justifyContent: 'center',
+  },
   heroShareBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: 'rgba(37,211,102,0.92)',

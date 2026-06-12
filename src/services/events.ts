@@ -85,7 +85,7 @@ export async function getEventsByMonth(year: number, month: number): Promise<Eve
   //   • Single-day: date_end IS NULL  AND  date_start within month
   const { data, error } = await supabase
     .from('events')
-    .select('*, venue:venues(*)')
+    .select('*, venue:venues(*), travel:travel(*)')
     .lte('date_start', end)
     .or(`date_end.gte.${start},and(date_end.is.null,date_start.gte.${start})`)
     .order('date_start', { ascending: true });
