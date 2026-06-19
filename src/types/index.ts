@@ -86,6 +86,7 @@ export interface ConnectionStop {
   airline?: string;
   departure_time?: string;
   arrival_time?: string;
+  ticket_url?: string;
 }
 
 export interface Travel {

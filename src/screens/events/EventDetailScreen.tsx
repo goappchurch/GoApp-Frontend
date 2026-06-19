@@ -1052,20 +1052,34 @@ function FlightCard({
               <View key={i} style={fc.stopRow}>
                 <View style={[fc.stopDot, { borderColor: color1 }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={fc.stopAirport}>
-                    {s.airport || `Stop ${i + 1}`}
+                  <View style={fc.stopTitleRow}>
+                    <Text style={fc.stopAirport}>{s.airport || `Stop ${i + 1}`}</Text>
                     {(s.airline || s.flight_number) ? (
-                      <Text style={fc.stopFlight}>{`   ${[s.airline, s.flight_number].filter(Boolean).join(' · ')}`}</Text>
+                      <Text style={fc.stopFlight}>{[s.airline, s.flight_number].filter(Boolean).join(' · ')}</Text>
                     ) : null}
-                  </Text>
-                  {(s.arrival_time || s.departure_time) && (
-                    <Text style={fc.stopTimes}>
-                      {[
-                        s.arrival_time && fmt ? `Arr ${fmt(s.arrival_time)}` : null,
-                        s.departure_time && fmt ? `Dep ${fmt(s.departure_time)}` : null,
-                      ].filter(Boolean).join('   ·   ')}
-                    </Text>
-                  )}
+                  </View>
+                  {s.arrival_time && fmt ? (
+                    <View style={fc.stopTimeLine}>
+                      <Ionicons name="flag-outline" size={10} color="#94A3B8" />
+                      <Text style={fc.stopTimes}>{`Arrives  ${fmt(s.arrival_time)}`}</Text>
+                    </View>
+                  ) : null}
+                  {s.departure_time && fmt ? (
+                    <View style={fc.stopTimeLine}>
+                      <Ionicons name="send-outline" size={10} color="#94A3B8" />
+                      <Text style={fc.stopTimes}>{`Departs  ${fmt(s.departure_time)}`}</Text>
+                    </View>
+                  ) : null}
+                  {s.ticket_url ? (
+                    <TouchableOpacity
+                      style={fc.stopPdfBtn}
+                      onPress={() => Linking.openURL(s.ticket_url!)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="document-text-outline" size={13} color={color1} />
+                      <Text style={[fc.stopPdfText, { color: color1 }]}>View Connection Ticket</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </View>
             ))}
@@ -1153,10 +1167,14 @@ const fc = StyleSheet.create({
   stopsHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   stopsTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
   stopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  stopDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 2, backgroundColor: '#fff', marginTop: 3 },
-  stopAirport: { fontSize: 13, fontWeight: '800', color: '#111827' },
-  stopFlight: { fontSize: 11, fontWeight: '600', color: '#92400E' },
-  stopTimes: { fontSize: 11, fontWeight: '600', color: '#94A3B8', marginTop: 2 },
+  stopDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 2, backgroundColor: '#fff', marginTop: 4 },
+  stopTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  stopAirport: { fontSize: 13, fontWeight: '800', color: '#111827', flexShrink: 1 },
+  stopFlight: { fontSize: 11, fontWeight: '700', color: '#92400E' },
+  stopTimeLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  stopTimes: { fontSize: 11, fontWeight: '600', color: '#64748B' },
+  stopPdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  stopPdfText: { fontSize: 12, fontWeight: '700' },
 });
 
 // ── Not booked placeholder ──

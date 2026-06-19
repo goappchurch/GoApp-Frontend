@@ -235,6 +235,16 @@ function StopRow({ index, stop, fmt }: { index: number; stop: ConnectionStop; fm
             {fmt(stop.arrival_time)}
           </Text>
         )}
+        {stop.ticket_url && (
+          <TouchableOpacity
+            style={mStyles.stopTicketBtn}
+            onPress={() => Linking.openURL(stop.ticket_url!)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="document-text-outline" size={13} color={colors.primary} />
+            <Text style={mStyles.stopTicketText}>View Connection Ticket</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -950,6 +960,8 @@ const mStyles = StyleSheet.create({
   stopLabel: { fontSize: 13, fontWeight: '800', color: '#92400E' },
   stopDetail: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginLeft: 14 },
   stopDetailMuted: { fontSize: 11, fontWeight: '500', color: colors.textTertiary },
+  stopTicketBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginLeft: 14, marginTop: 4 },
+  stopTicketText: { fontSize: 12, fontWeight: '700', color: colors.primary },
 
   // Ticket button
   ticketBtn: {},

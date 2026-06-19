@@ -206,30 +206,39 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
     }, { onConflict: 'event_id' });
   }
 
-  if (formData.flight_booked !== undefined) {
-    await supabase.from('travel').upsert({
-      event_id: id,
-      flight_booked: formData.flight_booked,
-      boarding_point: formData.boarding_point,
-      deboarding_point: formData.deboarding_point,
-      flight_number: formData.flight_number,
-      airline: formData.airline,
-      departure_time: formData.departure_time,
-      checkin_time: formData.flight_checkin_time,
-      arrival_time: formData.arrival_time,
-      flight_ticket_url: formData.ticket_pdf_url,
-      connections: formData.connections ?? [],
-      return_flight_booked: formData.return_flight_booked,
-      return_boarding_point: formData.return_boarding_point,
-      return_deboarding_point: formData.return_deboarding_point,
-      return_flight_number: formData.return_flight_number,
-      return_airline: formData.return_airline,
-      return_departure_time: formData.return_departure_time,
-      return_checkin_time: formData.return_flight_checkin_time,
-      return_arrival_time: formData.return_arrival_time,
-      return_ticket_pdf_url: formData.return_ticket_pdf_url,
-      return_connections: formData.return_connections ?? [],
-    }, { onConflict: 'event_id' });
+  // Build a travel payload containing only the fields actually provided, so a
+  // partial update (e.g. just a connection ticket) never clobbers other columns.
+  const travelMap: Array<[keyof EventFormData, string]> = [
+    ['flight_booked', 'flight_booked'],
+    ['boarding_point', 'boarding_point'],
+    ['deboarding_point', 'deboarding_point'],
+    ['flight_number', 'flight_number'],
+    ['airline', 'airline'],
+    ['departure_time', 'departure_time'],
+    ['flight_checkin_time', 'checkin_time'],
+    ['arrival_time', 'arrival_time'],
+    ['ticket_pdf_url', 'flight_ticket_url'],
+    ['connections', 'connections'],
+    ['return_flight_booked', 'return_flight_booked'],
+    ['return_boarding_point', 'return_boarding_point'],
+    ['return_deboarding_point', 'return_deboarding_point'],
+    ['return_flight_number', 'return_flight_number'],
+    ['return_airline', 'return_airline'],
+    ['return_departure_time', 'return_departure_time'],
+    ['return_flight_checkin_time', 'return_checkin_time'],
+    ['return_arrival_time', 'return_arrival_time'],
+    ['return_ticket_pdf_url', 'return_ticket_pdf_url'],
+    ['return_connections', 'return_connections'],
+  ];
+  const travelPayload: Record<string, unknown> = {};
+  for (const [formKey, col] of travelMap) {
+    if (formData[formKey] !== undefined) travelPayload[col] = formData[formKey];
+  }
+  if (Object.keys(travelPayload).length > 0) {
+    await supabase.from('travel').upsert(
+      { event_id: id, ...travelPayload },
+      { onConflict: 'event_id' },
+    );
   }
 
   if (formData.hotel_name !== undefined) {

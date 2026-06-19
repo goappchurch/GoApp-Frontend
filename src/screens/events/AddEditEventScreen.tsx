@@ -136,6 +136,9 @@ export default function AddEditEventScreen() {
   const [returnTicketUri, setReturnTicketUri] = useState<string | null>(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [uploadingReturnPdf, setUploadingReturnPdf] = useState(false);
+  // Connection ticket uploads, keyed by "out-<idx>" / "ret-<idx>"
+  const [connUploading, setConnUploading] = useState<Record<string, boolean>>({});
+  const connTicketUris = useRef<Record<string, string>>({});
 
   const [activeSection, setActiveSection] = useState(0);
   const [regionModal, setRegionModal] = useState(false);
@@ -345,6 +348,46 @@ export default function AddEditEventScreen() {
     }
   };
 
+  // Pick + (in edit mode) upload a connecting-flight ticket PDF.
+  // leg: 'connections' for outbound stops, 'return_connections' for return stops.
+  const handlePickConnectionTicket = async (
+    leg: 'connections' | 'return_connections',
+    idx: number,
+  ) => {
+    const result = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    const key = `${leg === 'connections' ? 'out' : 'ret'}-${idx}`;
+    connTicketUris.current[key] = asset.uri;
+
+    const setStopUrl = (url: string) => {
+      const next = [...(form[leg] ?? [])];
+      next[idx] = { ...next[idx], ticket_url: url };
+      set(leg, next);
+    };
+
+    if (route.params?.eventId) {
+      try {
+        setConnUploading((m) => ({ ...m, [key]: true }));
+        const url = await uploadTicketPdf(asset.uri, route.params.eventId, `${key}-ticket`);
+        setStopUrl(url);
+        delete connTicketUris.current[key];
+        await updateEvent(route.params.eventId, { [leg]: (() => {
+          const next = [...(form[leg] ?? [])];
+          next[idx] = { ...next[idx], ticket_url: url };
+          return next;
+        })() } as any);
+      } catch (e: any) {
+        Alert.alert('Upload failed', e?.message ?? 'Could not upload ticket');
+      } finally {
+        setConnUploading((m) => ({ ...m, [key]: false }));
+      }
+    } else {
+      // New event: just mark as selected; uploaded after the event is created.
+      setForm((f) => ({ ...f })); // force re-render to reflect pending state
+    }
+  };
+
   const checkConflict = (): boolean => {
     const newDate = new Date(form.date_start).toDateString();
     const currentEventId = route.params?.eventId;
@@ -401,6 +444,25 @@ export default function AddEditEventScreen() {
           } catch (uploadErr: any) {
             Alert.alert('Return ticket upload failed', uploadErr?.message ?? 'Event saved without return ticket.');
           }
+        }
+        // Upload any connecting-flight tickets picked before the event existed
+        const pendingKeys = Object.keys(connTicketUris.current);
+        if (pendingKeys.length) {
+          const outbound = [...(form.connections ?? [])];
+          const inbound = [...(form.return_connections ?? [])];
+          for (const key of pendingKeys) {
+            try {
+              const url = await uploadTicketPdf(connTicketUris.current[key], event.id, `${key}-ticket`);
+              const [legPrefix, idxStr] = key.split('-');
+              const idx = Number(idxStr);
+              if (legPrefix === 'out' && outbound[idx]) outbound[idx] = { ...outbound[idx], ticket_url: url };
+              if (legPrefix === 'ret' && inbound[idx]) inbound[idx] = { ...inbound[idx], ticket_url: url };
+            } catch (uploadErr: any) {
+              Alert.alert('Connection ticket upload failed', uploadErr?.message ?? 'Event saved without one connection ticket.');
+            }
+          }
+          connTicketUris.current = {};
+          await updateEvent(event.id, { connections: outbound, return_connections: inbound } as any);
         }
         const { data: bossUser } = await supabase.from('users').select('id').eq('role', 'boss').single();
         if (bossUser) {
@@ -709,6 +771,10 @@ export default function AddEditEventScreen() {
                       set('connections', next);
                     }}
                     onRemove={() => set('connections', (form.connections ?? []).filter((_, i) => i !== idx))}
+                    accent="#7C3AED"
+                    ticketPending={!!connTicketUris.current[`out-${idx}`]}
+                    ticketUploading={!!connUploading[`out-${idx}`]}
+                    onPickTicket={() => handlePickConnectionTicket('connections', idx)}
                   />
                 ))}
                 <TouchableOpacity
@@ -798,6 +864,10 @@ export default function AddEditEventScreen() {
                       set('return_connections', next);
                     }}
                     onRemove={() => set('return_connections', (form.return_connections ?? []).filter((_, i) => i !== idx))}
+                    accent={colors.success}
+                    ticketPending={!!connTicketUris.current[`ret-${idx}`]}
+                    ticketUploading={!!connUploading[`ret-${idx}`]}
+                    onPickTicket={() => handlePickConnectionTicket('return_connections', idx)}
                   />
                 ))}
                 <TouchableOpacity
@@ -1194,23 +1264,28 @@ function PdfButton({ label, color, bg, uploaded, selected, uploading, onPress }:
 
 function ConnectionCard({
   index, stop, onChange, onRemove,
+  accent = '#D97706', ticketPending = false, ticketUploading = false, onPickTicket,
 }: {
   index: number;
   stop: ConnectionStop;
   onChange: (updated: ConnectionStop) => void;
   onRemove: () => void;
+  accent?: string;
+  ticketPending?: boolean;
+  ticketUploading?: boolean;
+  onPickTicket?: () => void;
 }) {
   const upd = (key: keyof ConnectionStop, val: string | undefined) =>
     onChange({ ...stop, [key]: val });
 
   return (
-    <View style={conn.card}>
-      <View style={conn.header}>
+    <View style={[conn.card, { borderColor: accent + '33' }]}>
+      <View style={[conn.header, { backgroundColor: accent + '14' }]}>
         <View style={conn.headerLeft}>
-          <View style={conn.iconWrap}>
-            <Ionicons name="git-branch-outline" size={13} color="#D97706" />
+          <View style={[conn.iconWrap, { backgroundColor: accent + '22' }]}>
+            <Ionicons name="git-branch-outline" size={13} color={accent} />
           </View>
-          <Text style={conn.headerText}>Stop {index + 1}</Text>
+          <Text style={[conn.headerText, { color: accent }]}>Connection {index + 1}</Text>
         </View>
         <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <View style={conn.removeBtn}>
@@ -1219,7 +1294,7 @@ function ConnectionCard({
         </TouchableOpacity>
       </View>
       <View style={conn.body}>
-        <Field icon="location-outline" iconColor="#D97706" label="Stopover Airport">
+        <Field icon="location-outline" iconColor={accent} label="Stopover Airport">
           <TextInput
             style={fld.input}
             value={stop.airport ?? ''}
@@ -1230,7 +1305,18 @@ function ConnectionCard({
         </Field>
         <TwoFields
           left={
-            <Field icon="barcode-outline" iconColor="#D97706" label="Flight No.">
+            <Field icon="airplane-outline" iconColor={accent} label="Airline">
+              <TextInput
+                style={fld.input}
+                value={stop.airline ?? ''}
+                onChangeText={(v) => upd('airline', v)}
+                placeholder="Emirates"
+                placeholderTextColor="#9CA3AF"
+              />
+            </Field>
+          }
+          right={
+            <Field icon="barcode-outline" iconColor={accent} label="Flight No.">
               <TextInput
                 style={fld.input}
                 value={stop.flight_number ?? ''}
@@ -1241,30 +1327,30 @@ function ConnectionCard({
               />
             </Field>
           }
-          right={
-            <Field icon="airplane-outline" iconColor="#D97706" label="Airline">
-              <TextInput
-                style={fld.input}
-                value={stop.airline ?? ''}
-                onChangeText={(v) => upd('airline', v)}
-                placeholder="Emirates"
-                placeholderTextColor="#9CA3AF"
-              />
-            </Field>
-          }
         />
         <TwoFields
           left={
-            <Field icon="send-outline" iconColor="#D97706" label="Departs Stopover" noBox>
-              <DateField label="" value={stop.departure_time} onChange={(iso) => upd('departure_time', iso)} mode="datetime" placeholder="Not set" accentColor="#D97706" />
+            <Field icon="flag-outline" iconColor={accent} label="Arrives Stop" noBox>
+              <DateField label="" value={stop.arrival_time} onChange={(iso) => upd('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor={accent} />
             </Field>
           }
           right={
-            <Field icon="flag-outline" iconColor="#D97706" label="Arrives Destination" noBox>
-              <DateField label="" value={stop.arrival_time} onChange={(iso) => upd('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor="#D97706" />
+            <Field icon="send-outline" iconColor={accent} label="Departs Stop" noBox>
+              <DateField label="" value={stop.departure_time} onChange={(iso) => upd('departure_time', iso)} mode="datetime" placeholder="Not set" accentColor={accent} />
             </Field>
           }
         />
+        {onPickTicket && (
+          <PdfButton
+            label="Connection Ticket PDF"
+            color={accent}
+            bg={accent + '14'}
+            uploaded={!!stop.ticket_url}
+            selected={ticketPending}
+            uploading={ticketUploading}
+            onPress={onPickTicket}
+          />
+        )}
       </View>
     </View>
   );
