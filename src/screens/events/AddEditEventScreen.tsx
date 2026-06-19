@@ -129,7 +129,7 @@ export default function AddEditEventScreen() {
   }, [navigation, isEdit, saving]);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [existingEvents, setExistingEvents] = useState<{ date_start: string }[]>([]);
+  const [existingEvents, setExistingEvents] = useState<{ date_start: string; id: string }[]>([]);
   const [posterUri, setPosterUri] = useState<string | null>(null);
   const [uploadingPoster, setUploadingPoster] = useState(false);
   const [ticketUri, setTicketUri] = useState<string | null>(null);
@@ -167,7 +167,7 @@ export default function AddEditEventScreen() {
 
   const loadExistingEvents = async () => {
     try {
-      const { data } = await supabase.from('events').select('date_start');
+      const { data } = await supabase.from('events').select('date_start, id');
       setExistingEvents(data ?? []);
     } catch (_) {}
   };
@@ -345,9 +345,10 @@ export default function AddEditEventScreen() {
 
   const checkConflict = (): boolean => {
     const newDate = new Date(form.date_start).toDateString();
+    const currentEventId = route.params?.eventId;
     return existingEvents.some(
       (e) => new Date(e.date_start).toDateString() === newDate &&
-        (!isEdit || e.date_start !== form.date_start)
+        (!isEdit || e.id !== currentEventId)
     );
   };
 
@@ -355,7 +356,7 @@ export default function AddEditEventScreen() {
     if (saving) return;
     if (!form.title.trim()) { Alert.alert('Required', 'Event title is required'); return; }
     if (!user) return;
-    if (checkConflict()) {
+    if (!isEdit && checkConflict()) {
       Alert.alert(
         'Date Conflict',
         'A confirmed event already exists on this date. Save anyway?',
