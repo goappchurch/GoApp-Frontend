@@ -21,15 +21,7 @@ export async function getEvents(): Promise<Event[]> {
       *,
       venue:venues(*),
       organizer:event_organizers(*),
-      travel:travel(
-        id, event_id,
-        flight_booked, boarding_point, deboarding_point,
-        flight_number, airline, departure_time, checkin_time, arrival_time,
-        flight_ticket_url,
-        return_flight_booked, return_boarding_point, return_deboarding_point,
-        return_flight_number, return_airline, return_departure_time,
-        return_checkin_time, return_arrival_time, return_ticket_pdf_url
-      ),
+      travel:travel(*),
       accommodation:accommodation(*)
     `)
     .order('date_start', { ascending: true });
@@ -39,9 +31,10 @@ export async function getEvents(): Promise<Event[]> {
 }
 
 export async function getUpcomingEvents(limit = 5): Promise<Event[]> {
-  // Include events from 7 days ago so recently created/past events still appear
+  // Only today-or-future events (also keep multi-day events still ongoing today)
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
+  cutoff.setHours(0, 0, 0, 0);
+  const iso = cutoff.toISOString();
 
   const { data, error } = await supabase
     .from('events')
@@ -52,7 +45,7 @@ export async function getUpcomingEvents(limit = 5): Promise<Event[]> {
       travel:travel(*),
       accommodation:accommodation(*)
     `)
-    .gte('date_start', cutoff.toISOString())
+    .or(`date_start.gte.${iso},date_end.gte.${iso}`)
     .order('date_start', { ascending: true })
     .limit(limit);
 
@@ -138,6 +131,8 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
       flight_booked: formData.flight_booked ?? false,
       boarding_point: formData.boarding_point,
       deboarding_point: formData.deboarding_point,
+      checkin_airport: formData.checkin_airport,
+      arrival_airport: formData.arrival_airport,
       flight_number: formData.flight_number,
       airline: formData.airline,
       departure_time: formData.departure_time,
@@ -155,6 +150,8 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
       return_arrival_time: formData.return_arrival_time,
       return_ticket_pdf_url: formData.return_ticket_pdf_url,
       return_connections: formData.return_connections ?? [],
+      return_checkin_airport: formData.return_checkin_airport,
+      return_arrival_airport: formData.return_arrival_airport,
     }),
     supabase.from('accommodation').insert({
       event_id: eventId,
@@ -212,6 +209,8 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
     ['flight_booked', 'flight_booked'],
     ['boarding_point', 'boarding_point'],
     ['deboarding_point', 'deboarding_point'],
+    ['checkin_airport', 'checkin_airport'],
+    ['arrival_airport', 'arrival_airport'],
     ['flight_number', 'flight_number'],
     ['airline', 'airline'],
     ['departure_time', 'departure_time'],
@@ -222,6 +221,8 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
     ['return_flight_booked', 'return_flight_booked'],
     ['return_boarding_point', 'return_boarding_point'],
     ['return_deboarding_point', 'return_deboarding_point'],
+    ['return_checkin_airport', 'return_checkin_airport'],
+    ['return_arrival_airport', 'return_arrival_airport'],
     ['return_flight_number', 'return_flight_number'],
     ['return_airline', 'return_airline'],
     ['return_departure_time', 'return_departure_time'],

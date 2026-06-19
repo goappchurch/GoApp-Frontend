@@ -81,7 +81,8 @@ export interface EventOrganizer {
 }
 
 export interface ConnectionStop {
-  airport?: string;
+  airport?: string;        // place / city name
+  airport_name?: string;   // airport name
   flight_number?: string;
   airline?: string;
   departure_time?: string;
@@ -95,6 +96,8 @@ export interface Travel {
   flight_booked: boolean;
   boarding_point?: string;
   deboarding_point?: string;
+  checkin_airport?: string;
+  arrival_airport?: string;
   flight_number?: string;
   airline?: string;
   departure_time?: string;
@@ -105,6 +108,8 @@ export interface Travel {
   return_flight_booked?: boolean;
   return_boarding_point?: string;
   return_deboarding_point?: string;
+  return_checkin_airport?: string;
+  return_arrival_airport?: string;
   return_flight_number?: string;
   return_airline?: string;
   return_departure_time?: string;
@@ -190,6 +195,8 @@ export interface EventFormData {
   flight_booked?: boolean;
   boarding_point?: string;
   deboarding_point?: string;
+  checkin_airport?: string;
+  arrival_airport?: string;
   flight_number?: string;
   airline?: string;
   departure_time?: string;
@@ -201,6 +208,8 @@ export interface EventFormData {
   return_flight_booked?: boolean;
   return_boarding_point?: string;
   return_deboarding_point?: string;
+  return_checkin_airport?: string;
+  return_arrival_airport?: string;
   return_flight_number?: string;
   return_airline?: string;
   return_departure_time?: string;

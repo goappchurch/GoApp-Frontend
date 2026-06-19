@@ -77,7 +77,14 @@ export default function HomeScreen() {
   const loadData = useCallback(async () => {
     try {
       const upcoming = await getUpcomingEvents(10);
-      setUpcomingEvents(upcoming);
+      // Only keep events that are today or in the future — drop anything past
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const current = upcoming.filter((e) => {
+        const end = new Date(e.date_end ?? e.date_start);
+        return end >= startOfToday;
+      });
+      setUpcomingEvents(current);
       if (user) {
         const notifs = await getNotifications(user.id);
         setNotifications(notifs);

@@ -34,6 +34,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import { colors, shadow, radius, eventTypeLabels } from '../../constants/theme';
+import { shareViaWhatsApp, ticketMessage } from '../../utils/share';
 import { getLoadingVerse } from '../../constants/verses';
 
 type RouteProps = RouteProp<RootStackParamList, 'EventDetail'>;
@@ -604,13 +605,16 @@ export default function EventDetailScreen() {
                 flightNumber={t.flight_number}
                 from={t.boarding_point}
                 to={t.deboarding_point}
-                departure={t.departure_time ? fmt(t.departure_time) : undefined}
-                checkin={t.checkin_time ? fmt(t.checkin_time) : undefined}
-                arrival={t.arrival_time ? fmt(t.arrival_time) : undefined}
+                fromAirport={t.checkin_airport}
+                toAirport={t.arrival_airport}
+                departure={t.departure_time ?? undefined}
+                checkin={t.checkin_time ?? undefined}
+                arrival={t.arrival_time ?? undefined}
                 connections={t.connections}
                 fmt={fmt}
                 pdfUrl={t.flight_ticket_url ?? undefined}
                 pdfColor="#7C3AED"
+                eventTitle={event.title}
               />
             ) : (
               <NotBooked label="Flight not booked yet" />
@@ -626,14 +630,16 @@ export default function EventDetailScreen() {
                 flightNumber={t.return_flight_number}
                 from={t.return_boarding_point}
                 to={t.return_deboarding_point}
-                departure={t.return_departure_time ? fmt(t.return_departure_time) : undefined}
-                checkin={t.return_checkin_time ? fmt(t.return_checkin_time) : undefined}
-                arrival={t.return_arrival_time ? fmt(t.return_arrival_time) : undefined}
+                fromAirport={t.return_checkin_airport}
+                toAirport={t.return_arrival_airport}
+                departure={t.return_departure_time ?? undefined}
+                checkin={t.return_checkin_time ?? undefined}
+                arrival={t.return_arrival_time ?? undefined}
                 connections={t.return_connections}
                 fmt={fmt}
                 pdfUrl={t.return_ticket_pdf_url ?? undefined}
                 pdfColor="#059669"
-                pdfLabel="View Return Ticket PDF"
+                eventTitle={event.title}
               />
             ) : (
               <NotBooked label="Return flight not booked yet" />
@@ -982,22 +988,83 @@ const edb = StyleSheet.create({
   day: { fontSize: 20, fontWeight: '900', color: '#111827', textAlign: 'center', paddingVertical: 4 },
 });
 
-// ── Premium flight card ──
+// ── Premium flight card (leg-based journey) ──
+type JourneyLeg = {
+  from?: string | null;
+  to?: string | null;
+  fromAirport?: string | null;
+  toAirport?: string | null;
+  airline?: string | null;
+  flightNumber?: string | null;
+  departure?: string;   // raw ISO
+  arrival?: string;     // raw ISO
+  checkin?: string;     // raw ISO (first leg only)
+  ticketUrl?: string;
+};
+
+function buildLegs(
+  from?: string | null, to?: string | null,
+  airline?: string | null, flightNumber?: string | null,
+  departure?: string, arrival?: string, checkin?: string,
+  ticketUrl?: string, connections?: ConnectionStop[] | null,
+  fromAirport?: string | null, toAirport?: string | null,
+): JourneyLeg[] {
+  const stops = (connections ?? []).filter(
+    (s) => s.airport || s.airport_name || s.flight_number || s.airline || s.departure_time || s.arrival_time || s.ticket_url
+  );
+  if (stops.length === 0) {
+    return [{ from, to, fromAirport, toAirport, airline, flightNumber, departure, arrival, checkin, ticketUrl }];
+  }
+  const legs: JourneyLeg[] = [];
+  // Leg 1: boarding → first stop (main flight + main ticket)
+  legs.push({
+    from, to: stops[0].airport,
+    fromAirport, toAirport: stops[0].airport_name,
+    airline, flightNumber,
+    departure, arrival: stops[0].arrival_time, checkin,
+    ticketUrl,
+  });
+  // Middle legs: stop[k-1] → stop[k] (flight info belongs to the departing stop)
+  for (let k = 1; k < stops.length; k++) {
+    legs.push({
+      from: stops[k - 1].airport, to: stops[k].airport,
+      fromAirport: stops[k - 1].airport_name, toAirport: stops[k].airport_name,
+      airline: stops[k - 1].airline, flightNumber: stops[k - 1].flight_number,
+      departure: stops[k - 1].departure_time, arrival: stops[k].arrival_time,
+      ticketUrl: stops[k - 1].ticket_url,
+    });
+  }
+  // Final leg: last stop → destination
+  const last = stops[stops.length - 1];
+  legs.push({
+    from: last.airport, to,
+    fromAirport: last.airport_name, toAirport,
+    airline: last.airline, flightNumber: last.flight_number,
+    departure: last.departure_time, arrival,
+    ticketUrl: last.ticket_url,
+  });
+  return legs;
+}
+
 function FlightCard({
   color1, color2, status, airline, flightNumber,
-  from, to, departure, checkin, arrival, connections, fmt, pdfUrl, pdfColor, pdfLabel,
+  from, to, fromAirport, toAirport, departure, checkin, arrival, connections, fmt, pdfUrl, pdfColor, eventTitle,
 }: {
   color1: string; color2: string; status: string;
   airline?: string | null; flightNumber?: string | null;
   from?: string | null; to?: string | null;
+  fromAirport?: string | null; toAirport?: string | null;
   departure?: string; checkin?: string; arrival?: string;
   connections?: ConnectionStop[] | null;
   fmt?: (iso: string) => string;
-  pdfUrl?: string; pdfColor: string; pdfLabel?: string;
+  pdfUrl?: string; pdfColor: string; eventTitle?: string;
 }) {
-  const stops = (connections ?? []).filter(
-    (s) => s.airport || s.flight_number || s.airline || s.departure_time || s.arrival_time
-  );
+  const f = fmt ?? ((s: string) => s);
+  const legs = buildLegs(from, to, airline, flightNumber, departure, arrival, checkin, pdfUrl, connections, fromAirport, toAirport);
+  const hasStops = legs.length > 1;
+  // Full route: boarding → stop → … → destination
+  const routePoints = [legs[0].from, ...legs.map((l) => l.to)];
+
   return (
     <View style={fc.ticket}>
       <LinearGradient colors={[color1, color2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={fc.header}>
@@ -1006,131 +1073,133 @@ function FlightCard({
             <Ionicons name="checkmark-circle" size={12} color="rgba(255,255,255,0.9)" />
             <Text style={fc.statusText}>{status}</Text>
           </View>
-          {(airline || flightNumber) && (
-            <Text style={fc.flightNum}>{[airline, flightNumber].filter(Boolean).join(' · ')}</Text>
+          {hasStops && (
+            <View style={fc.viaPill}>
+              <Ionicons name="git-branch-outline" size={11} color="#fff" />
+              <Text style={fc.viaPillText}>{legs.length} flights</Text>
+            </View>
           )}
         </View>
-        {(from || to) && (
-          <View style={fc.headerRoute}>
-            <Text style={fc.headerFrom}>{from ?? '—'}</Text>
-            <Ionicons name="arrow-forward" size={14} color="rgba(255,255,255,0.7)" />
-            <Text style={fc.headerTo}>{to ?? '—'}</Text>
-          </View>
-        )}
+        {/* Full route line */}
+        <View style={fc.headerRoute}>
+          {routePoints.map((p, i) => (
+            <React.Fragment key={i}>
+              {i > 0 && <Ionicons name="arrow-forward" size={13} color="rgba(255,255,255,0.65)" />}
+              <Text style={[fc.headerStop, i === 0 || i === routePoints.length - 1 ? fc.headerStopMain : null]}>
+                {p ?? '—'}
+              </Text>
+            </React.Fragment>
+          ))}
+        </View>
       </LinearGradient>
 
       <View style={fc.body}>
-        {/* Route row */}
-        <View style={fc.route}>
-          <View style={fc.airport}>
-            <Text style={fc.code}>{from ?? '—'}</Text>
-            <Text style={fc.codeLabel}>From</Text>
-          </View>
-          <View style={fc.routeMid}>
-            <View style={fc.dot} />
-            <View style={fc.dash} />
-            <Ionicons name="airplane" size={20} color={color1} />
-            <View style={fc.dash} />
-            <View style={fc.dot} />
-          </View>
-          <View style={[fc.airport, { alignItems: 'flex-end' }]}>
-            <Text style={fc.code}>{to ?? '—'}</Text>
-            <Text style={fc.codeLabel}>To</Text>
-          </View>
-        </View>
+        {legs.map((leg, i) => (
+          <View key={i} style={[fc.leg, hasStops && fc.legCard]}>
+            {/* Leg label (only when there are connections) */}
+            {hasStops && (
+              <View style={fc.legLabelRow}>
+                <View style={[fc.legBadge, { backgroundColor: color1 }]}>
+                  <Text style={fc.legBadgeText}>{i + 1}</Text>
+                </View>
+                <Text style={[fc.legLabel, { color: color1 }]}>
+                  Flight {i + 1} of {legs.length}
+                </Text>
+                {(leg.airline || leg.flightNumber) && (
+                  <Text style={fc.legFlightNum}>{[leg.airline, leg.flightNumber].filter(Boolean).join(' · ')}</Text>
+                )}
+              </View>
+            )}
 
-        {/* Connecting flights */}
-        {stops.length > 0 && (
-          <View style={fc.stops}>
-            <View style={fc.stopsHeader}>
-              <Ionicons name="git-branch-outline" size={12} color={color1} />
-              <Text style={[fc.stopsTitle, { color: color1 }]}>
-                {stops.length === 1 ? '1 Connecting Flight' : `${stops.length} Connecting Flights`}
-              </Text>
+            {/* Route row */}
+            <View style={fc.route}>
+              <View style={fc.airport}>
+                <Text style={fc.code}>{leg.from ?? '—'}</Text>
+                {leg.fromAirport ? <Text style={fc.airportName}>{leg.fromAirport}</Text> : null}
+                <Text style={fc.codeLabel}>From</Text>
+              </View>
+              <View style={fc.routeMid}>
+                <View style={[fc.dot, { backgroundColor: color1 + '55' }]} />
+                <View style={[fc.dash, { backgroundColor: color1 + '33' }]} />
+                <Ionicons name="airplane" size={18} color={color1} />
+                <View style={[fc.dash, { backgroundColor: color1 + '33' }]} />
+                <View style={[fc.dot, { backgroundColor: color1 + '55' }]} />
+              </View>
+              <View style={[fc.airport, { alignItems: 'flex-end' }]}>
+                <Text style={fc.code}>{leg.to ?? '—'}</Text>
+                {leg.toAirport ? <Text style={[fc.airportName, { textAlign: 'right' }]}>{leg.toAirport}</Text> : null}
+                <Text style={fc.codeLabel}>To</Text>
+              </View>
             </View>
-            {stops.map((s, i) => (
-              <View key={i} style={fc.stopRow}>
-                <View style={[fc.stopDot, { borderColor: color1 }]} />
-                <View style={{ flex: 1 }}>
-                  <View style={fc.stopTitleRow}>
-                    <Text style={fc.stopAirport}>{s.airport || `Stop ${i + 1}`}</Text>
-                    {(s.airline || s.flight_number) ? (
-                      <Text style={fc.stopFlight}>{[s.airline, s.flight_number].filter(Boolean).join(' · ')}</Text>
-                    ) : null}
-                  </View>
-                  {s.arrival_time && fmt ? (
-                    <View style={fc.stopTimeLine}>
-                      <Ionicons name="flag-outline" size={10} color="#94A3B8" />
-                      <Text style={fc.stopTimes}>{`Arrives  ${fmt(s.arrival_time)}`}</Text>
-                    </View>
-                  ) : null}
-                  {s.departure_time && fmt ? (
-                    <View style={fc.stopTimeLine}>
-                      <Ionicons name="send-outline" size={10} color="#94A3B8" />
-                      <Text style={fc.stopTimes}>{`Departs  ${fmt(s.departure_time)}`}</Text>
-                    </View>
-                  ) : null}
-                  {s.ticket_url ? (
-                    <TouchableOpacity
-                      style={fc.stopPdfBtn}
-                      onPress={() => Linking.openURL(s.ticket_url!)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="document-text-outline" size={13} color={color1} />
-                      <Text style={[fc.stopPdfText, { color: color1 }]}>View Connection Ticket</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
 
-        {/* Time rows */}
-        {(departure || checkin || arrival) && (
-          <View style={fc.times}>
-            {departure && (
-              <View style={fc.timeRow}>
-                <View style={fc.timeLabelRow}>
-                  <View style={[fc.timeIconWrap, { backgroundColor: color1 + '22' }]}>
-                    <Ionicons name="send-outline" size={8} color={color1} />
+            {/* Single-flight: show the airline · flight number under route */}
+            {!hasStops && (leg.airline || leg.flightNumber) && (
+              <Text style={fc.singleFlightNum}>{[leg.airline, leg.flightNumber].filter(Boolean).join(' · ')}</Text>
+            )}
+
+            {/* Times */}
+            {(leg.departure || leg.checkin || leg.arrival) && (
+              <View style={fc.times}>
+                {leg.checkin && (
+                  <View style={fc.timeRow}>
+                    <View style={fc.timeLabelRow}>
+                      <View style={[fc.timeIconWrap, { backgroundColor: color1 + '22' }]}>
+                        <Ionicons name="time-outline" size={8} color={color1} />
+                      </View>
+                      <Text style={fc.timeLabel}>Check-in{(leg.fromAirport || leg.from) ? ` · ${leg.fromAirport || leg.from}` : ''}</Text>
+                    </View>
+                    <Text style={fc.timeValue}>{f(leg.checkin)}</Text>
                   </View>
-                  <Text style={fc.timeLabel}>Departure</Text>
-                </View>
-                <Text style={fc.timeValue}>{departure}</Text>
+                )}
+                {leg.departure && (
+                  <View style={fc.timeRow}>
+                    <View style={fc.timeLabelRow}>
+                      <View style={[fc.timeIconWrap, { backgroundColor: color1 + '22' }]}>
+                        <Ionicons name="send-outline" size={8} color={color1} />
+                      </View>
+                      <Text style={fc.timeLabel}>Departure{(leg.fromAirport || leg.from) ? ` · ${leg.fromAirport || leg.from}` : ''}</Text>
+                    </View>
+                    <Text style={fc.timeValue}>{f(leg.departure)}</Text>
+                  </View>
+                )}
+                {leg.arrival && (
+                  <View style={fc.timeRow}>
+                    <View style={fc.timeLabelRow}>
+                      <View style={[fc.timeIconWrap, { backgroundColor: color1 + '22' }]}>
+                        <Ionicons name="flag-outline" size={8} color={color1} />
+                      </View>
+                      <Text style={fc.timeLabel}>Arrival{(leg.toAirport || leg.to) ? ` · ${leg.toAirport || leg.to}` : ''}</Text>
+                    </View>
+                    <Text style={fc.timeValue}>{f(leg.arrival)}</Text>
+                  </View>
+                )}
               </View>
             )}
-            {checkin && (
-              <View style={fc.timeRow}>
-                <View style={fc.timeLabelRow}>
-                  <View style={[fc.timeIconWrap, { backgroundColor: color1 + '22' }]}>
-                    <Ionicons name="time-outline" size={8} color={color1} />
-                  </View>
-                  <Text style={fc.timeLabel}>Check-in</Text>
-                </View>
-                <Text style={fc.timeValue}>{checkin}</Text>
-              </View>
-            )}
-            {arrival && (
-              <View style={fc.timeRow}>
-                <View style={fc.timeLabelRow}>
-                  <View style={[fc.timeIconWrap, { backgroundColor: color1 + '22' }]}>
-                    <Ionicons name="flag-outline" size={8} color={color1} />
-                  </View>
-                  <Text style={fc.timeLabel}>Arrival</Text>
-                </View>
-                <Text style={fc.timeValue}>{arrival}</Text>
+
+            {/* Per-leg ticket: view + share to WhatsApp */}
+            {leg.ticketUrl && (
+              <View style={fc.ticketActions}>
+                <TouchableOpacity style={fc.ticketViewBtn} onPress={() => Linking.openURL(leg.ticketUrl!)} activeOpacity={0.85}>
+                  <Ionicons name="document-text-outline" size={15} color={pdfColor} />
+                  <Text style={[fc.pdfText, { color: pdfColor }]}>
+                    {hasStops ? `Flight ${i + 1} Ticket` : 'View Ticket'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={fc.waBtn}
+                  onPress={() => shareViaWhatsApp(ticketMessage(
+                    hasStops ? `Flight ${i + 1}: ${leg.from ?? ''} → ${leg.to ?? ''}` : 'Ticket',
+                    leg.ticketUrl!, eventTitle,
+                  ))}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+                  <Text style={fc.waText}>Share</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
-        )}
-
-        {pdfUrl && (
-          <TouchableOpacity style={fc.pdfBtn} onPress={() => Linking.openURL(pdfUrl!)} activeOpacity={0.85}>
-            <Ionicons name="document-text-outline" size={15} color={pdfColor} />
-            <Text style={[fc.pdfText, { color: pdfColor }]}>{pdfLabel ?? 'View Ticket PDF'}</Text>
-          </TouchableOpacity>
-        )}
+        ))}
       </View>
     </View>
   );
@@ -1141,40 +1210,42 @@ const fc = StyleSheet.create({
   header: { paddingHorizontal: 14, paddingVertical: 10, gap: 6 },
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerRow: { gap: 4 },
-  headerRoute: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerFrom: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
-  headerTo: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
+  headerRoute: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
+  headerStop: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.82)', letterSpacing: -0.2 },
+  headerStopMain: { fontSize: 16, fontWeight: '800', color: '#fff' },
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   statusText: { color: 'rgba(255,255,255,0.92)', fontSize: 11, fontWeight: '700' },
-  flightNum: { color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: -0.2 },
-  body: { backgroundColor: '#fff', padding: 12, gap: 10 },
+  viaPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.22)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  viaPillText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  body: { backgroundColor: '#fff', padding: 12, gap: 12 },
+  leg: { gap: 10 },
+  legLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legBadge: { width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+  legBadgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  legLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  legFlightNum: { marginLeft: 'auto', fontSize: 12, fontWeight: '700', color: '#475569' },
+  singleFlightNum: { fontSize: 12, fontWeight: '700', color: '#475569', textAlign: 'center', marginTop: -4 },
   route: { flexDirection: 'row', alignItems: 'center' },
   airport: { flex: 1, alignItems: 'flex-start' },
   code: { fontSize: 19, fontWeight: '900', color: '#111827', letterSpacing: -0.5 },
+  airportName: { fontSize: 11, fontWeight: '600', color: '#64748B', marginTop: 1 },
   codeLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 },
   routeMid: { flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'center', gap: 4, paddingHorizontal: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#DDD6FE' },
   dash: { flex: 1, height: 1.5, backgroundColor: '#DDD6FE' },
   times: { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, gap: 6, borderWidth: 1, borderColor: '#E9ECF1' },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  timeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  timeLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1, flex: 1 },
   timeIconWrap: { width: 16, height: 16, borderRadius: 5, justifyContent: 'center', alignItems: 'center' },
-  timeLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600' },
-  timeValue: { fontSize: 13, color: '#111827', fontWeight: '800' },
+  timeLabel: { fontSize: 11, color: '#94A3B8', fontWeight: '600', flexShrink: 1 },
+  timeValue: { fontSize: 13, color: '#111827', fontWeight: '800', marginLeft: 8 },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   pdfText: { fontWeight: '600', fontSize: 13 },
-  stops: { backgroundColor: '#FFFBEB', borderRadius: 12, padding: 10, gap: 8, borderWidth: 1, borderColor: '#FDE68A' },
-  stopsHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  stopsTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
-  stopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  stopDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 2, backgroundColor: '#fff', marginTop: 4 },
-  stopTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  stopAirport: { fontSize: 13, fontWeight: '800', color: '#111827', flexShrink: 1 },
-  stopFlight: { fontSize: 11, fontWeight: '700', color: '#92400E' },
-  stopTimeLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
-  stopTimes: { fontSize: 11, fontWeight: '600', color: '#64748B' },
-  stopPdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
-  stopPdfText: { fontSize: 12, fontWeight: '700' },
+  ticketActions: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  ticketViewBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  waBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#25D366', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
+  waText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  legCard: { backgroundColor: '#FAFAFB', borderRadius: 14, padding: 12, gap: 10, borderWidth: 1, borderColor: '#EEF0F4' },
 });
 
 // ── Not booked placeholder ──

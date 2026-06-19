@@ -199,6 +199,8 @@ export default function AddEditEventScreen() {
         flight_booked: event.travel?.flight_booked ?? false,
         boarding_point: event.travel?.boarding_point,
         deboarding_point: event.travel?.deboarding_point,
+        checkin_airport: event.travel?.checkin_airport,
+        arrival_airport: event.travel?.arrival_airport,
         flight_number: event.travel?.flight_number,
         airline: event.travel?.airline,
         departure_time: event.travel?.departure_time,
@@ -209,6 +211,8 @@ export default function AddEditEventScreen() {
         return_flight_booked: event.travel?.return_flight_booked ?? false,
         return_boarding_point: event.travel?.return_boarding_point,
         return_deboarding_point: event.travel?.return_deboarding_point,
+        return_checkin_airport: event.travel?.return_checkin_airport,
+        return_arrival_airport: event.travel?.return_arrival_airport,
         return_flight_number: event.travel?.return_flight_number,
         return_airline: event.travel?.return_airline,
         return_departure_time: event.travel?.return_departure_time,
@@ -254,10 +258,14 @@ export default function AddEditEventScreen() {
         flight_booked: event.travel?.flight_booked ?? false,
         boarding_point: event.travel?.boarding_point,
         deboarding_point: event.travel?.deboarding_point,
+        checkin_airport: event.travel?.checkin_airport,
+        arrival_airport: event.travel?.arrival_airport,
         airline: event.travel?.airline,
         return_flight_booked: event.travel?.return_flight_booked ?? false,
         return_boarding_point: event.travel?.return_boarding_point,
         return_deboarding_point: event.travel?.return_deboarding_point,
+        return_checkin_airport: event.travel?.return_checkin_airport,
+        return_arrival_airport: event.travel?.return_arrival_airport,
         return_airline: event.travel?.return_airline,
         hotel_name: event.accommodation?.hotel_name,
         hotel_address: event.accommodation?.address,
@@ -735,6 +743,18 @@ export default function AddEditEventScreen() {
                 />
                 <TwoFields
                   left={
+                    <Field icon="business-outline" iconColor="#7C3AED" label="Check-in Airport">
+                      <TextInput style={fld.input} value={form.checkin_airport ?? ''} onChangeText={(v) => set('checkin_airport', v)} placeholder="e.g. Cochin Intl (COK)" placeholderTextColor="#9CA3AF" />
+                    </Field>
+                  }
+                  right={
+                    <Field icon="business-outline" iconColor="#7C3AED" label="Arrival Airport">
+                      <TextInput style={fld.input} value={form.arrival_airport ?? ''} onChangeText={(v) => set('arrival_airport', v)} placeholder="e.g. Dubai Intl (DXB)" placeholderTextColor="#9CA3AF" />
+                    </Field>
+                  }
+                />
+                <TwoFields
+                  left={
                     <Field icon="barcode-outline" iconColor="#7C3AED" label="Flight No.">
                       <TextInput style={fld.input} value={form.flight_number ?? ''} onChangeText={(v) => set('flight_number', v)} placeholder="EK 123" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
                     </Field>
@@ -823,6 +843,18 @@ export default function AddEditEventScreen() {
                   right={
                     <Field icon="location-outline" iconColor={colors.success} label="Deboarding Point">
                       <TextInput style={fld.input} value={form.return_deboarding_point ?? ''} onChangeText={(v) => set('return_deboarding_point', v)} placeholder="e.g. Kochi" placeholderTextColor="#9CA3AF" />
+                    </Field>
+                  }
+                />
+                <TwoFields
+                  left={
+                    <Field icon="business-outline" iconColor={colors.success} label="Check-in Airport">
+                      <TextInput style={fld.input} value={form.return_checkin_airport ?? ''} onChangeText={(v) => set('return_checkin_airport', v)} placeholder="e.g. Dubai Intl (DXB)" placeholderTextColor="#9CA3AF" />
+                    </Field>
+                  }
+                  right={
+                    <Field icon="business-outline" iconColor={colors.success} label="Arrival Airport">
+                      <TextInput style={fld.input} value={form.return_arrival_airport ?? ''} onChangeText={(v) => set('return_arrival_airport', v)} placeholder="e.g. Cochin Intl (COK)" placeholderTextColor="#9CA3AF" />
                     </Field>
                   }
                 />
@@ -1294,15 +1326,30 @@ function ConnectionCard({
         </TouchableOpacity>
       </View>
       <View style={conn.body}>
-        <Field icon="location-outline" iconColor={accent} label="Stopover Airport">
-          <TextInput
-            style={fld.input}
-            value={stop.airport ?? ''}
-            onChangeText={(v) => upd('airport', v)}
-            placeholder="e.g. Dubai / DXB"
-            placeholderTextColor="#9CA3AF"
-          />
-        </Field>
+        <TwoFields
+          left={
+            <Field icon="location-outline" iconColor={accent} label="Stopover Place">
+              <TextInput
+                style={fld.input}
+                value={stop.airport ?? ''}
+                onChangeText={(v) => upd('airport', v)}
+                placeholder="e.g. Dubai"
+                placeholderTextColor="#9CA3AF"
+              />
+            </Field>
+          }
+          right={
+            <Field icon="business-outline" iconColor={accent} label="Airport Name">
+              <TextInput
+                style={fld.input}
+                value={stop.airport_name ?? ''}
+                onChangeText={(v) => upd('airport_name', v)}
+                placeholder="e.g. Dubai Intl (DXB)"
+                placeholderTextColor="#9CA3AF"
+              />
+            </Field>
+          }
+        />
         <TwoFields
           left={
             <Field icon="airplane-outline" iconColor={accent} label="Airline">

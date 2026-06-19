@@ -11,7 +11,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -46,6 +46,7 @@ export default function EventsListScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
   const route = useRoute<EventsRoute>();
+  const insets = useSafeAreaInsets();
   const isAssistant = user?.role === 'assistant';
 
   const [events, setEvents] = useState<Event[]>([]);
@@ -144,13 +145,13 @@ export default function EventsListScreen() {
   }, [filtered, timeFilters]);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
       {/* ── GRADIENT HERO ── */}
       <LinearGradient
         colors={gradients.header}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.hero}
+        style={[styles.hero, { paddingTop: insets.top + 14 }]}
       >
         {/* Title row */}
         <View style={styles.heroBar}>
@@ -220,7 +221,7 @@ export default function EventsListScreen() {
           ))}
           <TouchableOpacity
             style={[styles.chip, timeFilters.includes('today') && styles.chipTodayActive]}
-            onPress={() => setTimeFilters(['today'])}
+            onPress={() => setTimeFilters(prev => prev.includes('today') ? ['upcoming'] : ['today'])}
             activeOpacity={0.75}
           >
             <Ionicons

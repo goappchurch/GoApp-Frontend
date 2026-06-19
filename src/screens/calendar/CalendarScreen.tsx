@@ -123,7 +123,6 @@ function buildAgendaGroups(events: Event[]) {
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const CAL_H_PAD = 14;
-const CELL_SIZE = Math.floor((SCREEN_W - 32 - CAL_H_PAD * 2) / 7);
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -569,6 +568,11 @@ export default function CalendarScreen() {
                         const roundLeft  = isSpanStart && spanForCol!.isEventStart;
                         const roundRight = isSpanEnd   && spanForCol!.isEventEnd;
 
+                        // Past days get a grey marker instead of green
+                        const cellDate = day !== null ? new Date(currentMonth.year, currentMonth.month - 1, day) : null;
+                        const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+                        const isPastCell = cellDate ? cellDate < startOfToday : false;
+
                         const spanBg = isInSpan ? (
                           <View
                             pointerEvents="none"
@@ -578,7 +582,7 @@ export default function CalendarScreen() {
                               right: roundRight ? 4 : 0,
                               top: 4,
                               bottom: 4,
-                              backgroundColor: '#22C55E',
+                              backgroundColor: isPastCell ? '#9CA3AF' : '#22C55E',
                               borderTopLeftRadius: roundLeft ? 20 : 0,
                               borderBottomLeftRadius: roundLeft ? 20 : 0,
                               borderTopRightRadius: roundRight ? 20 : 0,
@@ -622,13 +626,13 @@ export default function CalendarScreen() {
                           >
                             {spanBg}
                             {hasFlight && (
-                              <View style={styles.flightBadge} pointerEvents="none">
+                              <View style={[styles.flightBadge, isPastCell && { backgroundColor: '#9CA3AF' }]} pointerEvents="none">
                                 <Ionicons name="airplane" size={8} color="#fff" />
                               </View>
                             )}
                             {hasEvent && !isInSpan ? (
                               <LinearGradient
-                                colors={['#22C55E', '#16A34A']}
+                                colors={isPastCell ? ['#9CA3AF', '#6B7280'] : ['#22C55E', '#16A34A']}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={[styles.calDayCapsule, isSelected && styles.calDayCapsuleSelected]}
@@ -703,6 +707,9 @@ export default function CalendarScreen() {
                     const roundLeft  = isInSpan && ci === spanForCol!.startCol && spanForCol!.isEventStart;
                     const roundRight = isInSpan && ci === spanForCol!.endCol   && spanForCol!.isEventEnd;
 
+                    const startOfTodayW = new Date(); startOfTodayW.setHours(0, 0, 0, 0);
+                    const isPastCell = d < startOfTodayW;
+
                     return (
                       <TouchableOpacity
                         key={ds}
@@ -724,7 +731,7 @@ export default function CalendarScreen() {
                         </Text>
                         <View style={styles.weekCircleWrap}>
                           {dayFlights.length > 0 && (
-                            <View style={styles.flightBadgeWeek} pointerEvents="none">
+                            <View style={[styles.flightBadgeWeek, isPastCell && { backgroundColor: '#9CA3AF' }]} pointerEvents="none">
                               <Ionicons name="airplane" size={8} color="#fff" />
                             </View>
                           )}
@@ -736,7 +743,7 @@ export default function CalendarScreen() {
                                 left: roundLeft ? 4 : 0,
                                 right: roundRight ? 4 : 0,
                                 top: 0, bottom: 0,
-                                backgroundColor: '#22C55E',
+                                backgroundColor: isPastCell ? '#9CA3AF' : '#22C55E',
                                 borderTopLeftRadius: roundLeft ? 20 : 0,
                                 borderBottomLeftRadius: roundLeft ? 20 : 0,
                                 borderTopRightRadius: roundRight ? 20 : 0,
@@ -746,7 +753,7 @@ export default function CalendarScreen() {
                           )}
                           {dayEvts.length > 0 ? (
                             <LinearGradient
-                              colors={['#22C55E', '#16A34A']}
+                              colors={isPastCell ? ['#9CA3AF', '#6B7280'] : ['#22C55E', '#16A34A']}
                               start={{ x: 0, y: 0 }}
                               end={{ x: 1, y: 1 }}
                               style={styles.weekDayCircleSel}
@@ -890,6 +897,12 @@ export default function CalendarScreen() {
             setPopupDate(null);
             setFlightDetailEvent(event);
           }}
+          canCreate={isAssistant}
+          onCreate={() => {
+            const ds = popupDate;
+            setPopupDate(null);
+            if (ds) navigation.navigate('AddEditEvent', { defaultDate: ds });
+          }}
         />
       </SafeAreaView>
     </LinearGradient>
@@ -965,15 +978,26 @@ function DayPanel({
   );
 }
 
+function isPastEvent(event: Event): boolean {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return new Date(event.date_end ?? event.date_start) < startOfToday;
+}
+
 function PremiumEventCard({ event, onPress }: { event: Event; onPress: () => void }) {
+  const past = isPastEvent(event);
   return (
-    <TouchableOpacity style={styles.premCard} onPress={onPress} activeOpacity={0.8}>
-      <View style={[styles.premStripe, { backgroundColor: '#4F46E5' }]} />
-      <View style={styles.premIconBox}>
-        <Text style={{ fontSize: 17 }}>{eventTypeIcons[event.event_type] ?? '📅'}</Text>
+    <TouchableOpacity
+      style={[styles.premCard, past && styles.premCardPast]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <View style={[styles.premStripe, { backgroundColor: past ? '#9CA3AF' : '#4F46E5' }]} />
+      <View style={[styles.premIconBox, past && { backgroundColor: 'rgba(107,114,128,0.10)' }]}>
+        <Text style={{ fontSize: 17, opacity: past ? 0.55 : 1 }}>{eventTypeIcons[event.event_type] ?? '📅'}</Text>
       </View>
       <View style={styles.premBody}>
-        <Text style={styles.premTitle} numberOfLines={1}>{event.title}</Text>
+        <Text style={[styles.premTitle, past && { color: '#6B7280' }]} numberOfLines={1}>{event.title}</Text>
         <View style={styles.premMeta}>
           <Ionicons name="time-outline" size={10} color="#6B7280" />
           <Text style={styles.premMetaText}>{formatTime(event.date_start)}</Text>
@@ -983,6 +1007,11 @@ function PremiumEventCard({ event, onPress }: { event: Event; onPress: () => voi
               <Ionicons name="location-outline" size={10} color="#6B7280" />
               <Text style={styles.premMetaText}>{(event as any).venue.city}</Text>
             </>
+          )}
+          {past && (
+            <View style={styles.pastBadge}>
+              <Text style={styles.pastBadgeText}>PAST</Text>
+            </View>
           )}
         </View>
       </View>
@@ -1007,7 +1036,7 @@ function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 function DatePopupModal({
-  visible, dateStr, events, flights, onClose, onEventPress, onFlightPress,
+  visible, dateStr, events, flights, onClose, onEventPress, onFlightPress, onCreate, canCreate,
 }: {
   visible: boolean;
   dateStr: string;
@@ -1016,6 +1045,8 @@ function DatePopupModal({
   onClose: () => void;
   onEventPress: (id: string) => void;
   onFlightPress: (event: Event) => void;
+  onCreate?: () => void;
+  canCreate?: boolean;
 }) {
   const [currentPage, setCurrentPage] = useState(0);
   const [fullPosterUrl, setFullPosterUrl] = useState<string | null>(null);
@@ -1299,6 +1330,14 @@ function DatePopupModal({
             </View>
           )}
 
+          {/* ── Create event on this date ── */}
+          {canCreate && (
+            <TouchableOpacity style={popupStyles.createBtn} onPress={onCreate} activeOpacity={0.85}>
+              <Ionicons name="add-circle-outline" size={16} color={colors.primary} />
+              <Text style={popupStyles.createBtnText}>Create event on this date</Text>
+            </TouchableOpacity>
+          )}
+
         </View>
       </View>
 
@@ -1490,7 +1529,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   calHeaders: { flexDirection: 'row', marginBottom: 4 },
-  calHeaderCell: { width: CELL_SIZE, alignItems: 'center', paddingVertical: 4 },
+  calHeaderCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   calHeaderText: {
     fontSize: 11,
     fontWeight: '700',
@@ -1499,15 +1538,15 @@ const styles = StyleSheet.create({
   },
   calRow: { flexDirection: 'row', marginBottom: 1 },
   calCell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
+    flex: 1,
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingTop: 3,
   },
   calDayCapsule: {
-    width: CELL_SIZE - 8,
-    height: CELL_SIZE - 10,
+    width: '82%',
+    aspectRatio: 1,
     borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1517,8 +1556,8 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   calDayNormal: {
-    width: CELL_SIZE - 8,
-    height: CELL_SIZE - 10,
+    width: '82%',
+    aspectRatio: 1,
     borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1677,7 +1716,21 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 4,
   },
+  premCardPast: {
+    backgroundColor: 'rgba(229,231,235,0.7)',
+    borderColor: 'rgba(156,163,175,0.3)',
+    shadowOpacity: 0,
+    elevation: 1,
+  },
   premStripe: { width: 3.5, alignSelf: 'stretch' },
+  pastBadge: {
+    marginLeft: 4,
+    backgroundColor: 'rgba(107,114,128,0.18)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  pastBadgeText: { fontSize: 9, fontWeight: '800', color: '#6B7280', letterSpacing: 0.5 },
   premIconBox: {
     width: 40,
     height: 40,
@@ -2113,6 +2166,22 @@ const popupStyles = StyleSheet.create({
     marginLeft: 4,
     letterSpacing: 0.3,
   },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 14,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.35)',
+    borderStyle: 'dashed',
+  },
+  createBtnText: { fontSize: 13, fontWeight: '800', color: colors.primary },
   fullPosterBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.96)',
