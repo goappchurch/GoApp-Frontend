@@ -21,7 +21,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { getEvents } from '../../services/events';
-import { Event } from '../../types';
+import { Event, ConnectionStop } from '../../types';
 import { colors, shadow, radius, gradients } from '../../constants/theme';
 import { getLoadingVerse } from '../../constants/verses';
 
@@ -208,6 +208,38 @@ export default function FlightsScreen() {
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
+function StopRow({ index, stop, fmt }: { index: number; stop: ConnectionStop; fmt: (iso: string | undefined | null) => string }) {
+  return (
+    <View style={mStyles.stopRow}>
+      <View style={mStyles.stopBorder} />
+      <View style={{ flex: 1, gap: 3 }}>
+        <View style={mStyles.stopHeaderRow}>
+          <View style={mStyles.stopDot} />
+          <Text style={mStyles.stopLabel}>Stop {index + 1}{stop.airport ? ` · ${stop.airport}` : ''}</Text>
+        </View>
+        {(stop.flight_number || stop.airline) && (
+          <Text style={mStyles.stopDetail}>
+            <Text style={mStyles.stopDetailMuted}>Flight  </Text>
+            {[stop.flight_number, stop.airline].filter(Boolean).join(' · ')}
+          </Text>
+        )}
+        {stop.departure_time && (
+          <Text style={mStyles.stopDetail}>
+            <Text style={mStyles.stopDetailMuted}>Departs  </Text>
+            {fmt(stop.departure_time)}
+          </Text>
+        )}
+        {stop.arrival_time && (
+          <Text style={mStyles.stopDetail}>
+            <Text style={mStyles.stopDetailMuted}>Arrives  </Text>
+            {fmt(stop.arrival_time)}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function DetailRow({ icon, label, value, valueColor }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; valueColor?: string }) {
   return (
     <View style={mStyles.detailRow}>
@@ -314,6 +346,9 @@ export function FlightDetailModal({
                   {t.departure_time && (
                     <DetailRow icon="exit-outline" label="Departure" value={fmt(t.departure_time)} />
                   )}
+                  {(t.connections ?? []).map((stop, idx) => (
+                    <StopRow key={idx} index={idx} stop={stop} fmt={fmt} />
+                  ))}
                   {t.arrival_time && (
                     <DetailRow icon="enter-outline" label="Arrival" value={fmt(t.arrival_time)} />
                   )}
@@ -356,6 +391,9 @@ export function FlightDetailModal({
                   {t.return_departure_time && (
                     <DetailRow icon="exit-outline" label="Departure" value={fmt(t.return_departure_time)} valueColor="#059669" />
                   )}
+                  {(t.return_connections ?? []).map((stop, idx) => (
+                    <StopRow key={idx} index={idx} stop={stop} fmt={fmt} />
+                  ))}
                   {t.return_arrival_time && (
                     <DetailRow icon="enter-outline" label="Arrival" value={fmt(t.return_arrival_time)} valueColor="#059669" />
                   )}
@@ -466,6 +504,11 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
             <Ionicons name="airplane" size={16} color={colors.primary} style={styles.routeArrowIcon} />
             <Text style={styles.routeTo} numberOfLines={1}>{destination}</Text>
           </View>
+          {(event.travel?.connections ?? []).length > 0 && (
+            <Text style={styles.viaText} numberOfLines={1}>
+              via {(event.travel!.connections!).map(s => s.airport).filter(Boolean).join(' · ')}
+            </Text>
+          )}
 
           <View style={styles.divider} />
 
@@ -528,10 +571,17 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
               </View>
 
               <View style={styles.returnRouteRow}>
-                <View style={[styles.routeRow, { flex: 1 }]}>
-                  <Text style={[styles.routeFrom, { color: '#059669' }]} numberOfLines={1}>{returnOrigin}</Text>
-                  <Ionicons name="airplane" size={16} color="#059669" style={[styles.routeArrowIcon]} />
-                  <Text style={[styles.routeTo, { color: '#059669' }]} numberOfLines={1}>{returnDest}</Text>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <View style={styles.routeRow}>
+                    <Text style={[styles.routeFrom, { color: '#059669' }]} numberOfLines={1}>{returnOrigin}</Text>
+                    <Ionicons name="airplane" size={16} color="#059669" style={[styles.routeArrowIcon]} />
+                    <Text style={[styles.routeTo, { color: '#059669' }]} numberOfLines={1}>{returnDest}</Text>
+                  </View>
+                  {(event.travel?.return_connections ?? []).length > 0 && (
+                    <Text style={[styles.viaText, { color: '#D97706' }]} numberOfLines={1}>
+                      via {(event.travel!.return_connections!).map(s => s.airport).filter(Boolean).join(' · ')}
+                    </Text>
+                  )}
                 </View>
                 {event.travel?.return_departure_time && (
                   <View style={styles.returnDateBlock}>
@@ -735,6 +785,8 @@ const styles = StyleSheet.create({
 
   divider: { height: 1, backgroundColor: colors.border },
 
+  viaText: { fontSize: 11, fontWeight: '600', color: '#D97706', marginTop: -2 },
+
   // 2-column detail grid
   detailsGrid: {
     flexDirection: 'row',
@@ -874,6 +926,30 @@ const mStyles = StyleSheet.create({
   },
   detailRowLabel: { fontSize: 10, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
   detailRowValue: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, marginTop: 2 },
+
+  // Stop rows
+  stopRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  stopBorder: {
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: '#FDE68A',
+    alignSelf: 'stretch',
+    marginLeft: 6,
+  },
+  stopHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stopDot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: '#D97706',
+  },
+  stopLabel: { fontSize: 13, fontWeight: '800', color: '#92400E' },
+  stopDetail: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginLeft: 14 },
+  stopDetailMuted: { fontSize: 11, fontWeight: '500', color: colors.textTertiary },
 
   // Ticket button
   ticketBtn: {},

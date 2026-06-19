@@ -30,7 +30,7 @@ import {
 } from '../../services/events';
 import { getContacts } from '../../services/contacts';
 import { supabase } from '../../lib/supabase';
-import { EventFormData, Contact } from '../../types';
+import { EventFormData, Contact, ConnectionStop } from '../../types';
 import { colors, shadow, radius } from '../../constants/theme';
 import { getLoadingVerse } from '../../constants/verses';
 
@@ -202,6 +202,7 @@ export default function AddEditEventScreen() {
         flight_checkin_time: event.travel?.checkin_time,
         arrival_time: event.travel?.arrival_time,
         ticket_pdf_url: event.travel?.flight_ticket_url,
+        connections: event.travel?.connections ?? [],
         return_flight_booked: event.travel?.return_flight_booked ?? false,
         return_boarding_point: event.travel?.return_boarding_point,
         return_deboarding_point: event.travel?.return_deboarding_point,
@@ -211,6 +212,7 @@ export default function AddEditEventScreen() {
         return_flight_checkin_time: event.travel?.return_checkin_time,
         return_arrival_time: event.travel?.return_arrival_time,
         return_ticket_pdf_url: event.travel?.return_ticket_pdf_url,
+        return_connections: event.travel?.return_connections ?? [],
         hotel_name: event.accommodation?.hotel_name,
         hotel_address: event.accommodation?.address,
         check_in: event.accommodation?.check_in,
@@ -696,6 +698,32 @@ export default function AddEditEventScreen() {
                 <Field icon="flag-outline" iconColor="#7C3AED" label="Arrival Time" noBox>
                   <DateField label="" value={form.arrival_time} onChange={(iso) => set('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
                 </Field>
+                {(form.connections ?? []).map((stop, idx) => (
+                  <ConnectionCard
+                    key={idx}
+                    index={idx}
+                    stop={stop}
+                    onChange={(updated) => {
+                      const next = [...(form.connections ?? [])];
+                      next[idx] = updated;
+                      set('connections', next);
+                    }}
+                    onRemove={() => set('connections', (form.connections ?? []).filter((_, i) => i !== idx))}
+                  />
+                ))}
+                <TouchableOpacity
+                  style={styles.addConnectionBtn}
+                  onPress={() => set('connections', [...(form.connections ?? []), {}])}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.addConnectionIcon}>
+                    <Ionicons name="git-branch-outline" size={14} color="#D97706" />
+                  </View>
+                  <Text style={styles.addConnectionText}>
+                    {(form.connections ?? []).length === 0 ? 'Add Connecting Flight' : 'Add Another Stop'}
+                  </Text>
+                  <Ionicons name="add" size={16} color="#D97706" />
+                </TouchableOpacity>
                 <PdfButton
                   label="Outbound Ticket PDF"
                   color="#7C3AED"
@@ -759,6 +787,32 @@ export default function AddEditEventScreen() {
                 <Field icon="flag-outline" iconColor={colors.success} label="Arrival Time" noBox>
                   <DateField label="" value={form.return_arrival_time} onChange={(iso) => set('return_arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
                 </Field>
+                {(form.return_connections ?? []).map((stop, idx) => (
+                  <ConnectionCard
+                    key={idx}
+                    index={idx}
+                    stop={stop}
+                    onChange={(updated) => {
+                      const next = [...(form.return_connections ?? [])];
+                      next[idx] = updated;
+                      set('return_connections', next);
+                    }}
+                    onRemove={() => set('return_connections', (form.return_connections ?? []).filter((_, i) => i !== idx))}
+                  />
+                ))}
+                <TouchableOpacity
+                  style={styles.addConnectionBtn}
+                  onPress={() => set('return_connections', [...(form.return_connections ?? []), {}])}
+                  activeOpacity={0.75}
+                >
+                  <View style={styles.addConnectionIcon}>
+                    <Ionicons name="git-branch-outline" size={14} color="#D97706" />
+                  </View>
+                  <Text style={styles.addConnectionText}>
+                    {(form.return_connections ?? []).length === 0 ? 'Add Connecting Flight' : 'Add Another Stop'}
+                  </Text>
+                  <Ionicons name="add" size={16} color="#D97706" />
+                </TouchableOpacity>
                 <PdfButton
                   label="Return Ticket PDF"
                   color={colors.success}
@@ -1138,6 +1192,84 @@ function PdfButton({ label, color, bg, uploaded, selected, uploading, onPress }:
   );
 }
 
+function ConnectionCard({
+  index, stop, onChange, onRemove,
+}: {
+  index: number;
+  stop: ConnectionStop;
+  onChange: (updated: ConnectionStop) => void;
+  onRemove: () => void;
+}) {
+  const upd = (key: keyof ConnectionStop, val: string | undefined) =>
+    onChange({ ...stop, [key]: val });
+
+  return (
+    <View style={conn.card}>
+      <View style={conn.header}>
+        <View style={conn.headerLeft}>
+          <View style={conn.iconWrap}>
+            <Ionicons name="git-branch-outline" size={13} color="#D97706" />
+          </View>
+          <Text style={conn.headerText}>Stop {index + 1}</Text>
+        </View>
+        <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <View style={conn.removeBtn}>
+            <Ionicons name="close" size={12} color={colors.danger} />
+          </View>
+        </TouchableOpacity>
+      </View>
+      <View style={conn.body}>
+        <Field icon="location-outline" iconColor="#D97706" label="Stopover Airport">
+          <TextInput
+            style={fld.input}
+            value={stop.airport ?? ''}
+            onChangeText={(v) => upd('airport', v)}
+            placeholder="e.g. Dubai / DXB"
+            placeholderTextColor="#9CA3AF"
+          />
+        </Field>
+        <TwoFields
+          left={
+            <Field icon="barcode-outline" iconColor="#D97706" label="Flight No.">
+              <TextInput
+                style={fld.input}
+                value={stop.flight_number ?? ''}
+                onChangeText={(v) => upd('flight_number', v)}
+                placeholder="EK 007"
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="characters"
+              />
+            </Field>
+          }
+          right={
+            <Field icon="airplane-outline" iconColor="#D97706" label="Airline">
+              <TextInput
+                style={fld.input}
+                value={stop.airline ?? ''}
+                onChangeText={(v) => upd('airline', v)}
+                placeholder="Emirates"
+                placeholderTextColor="#9CA3AF"
+              />
+            </Field>
+          }
+        />
+        <TwoFields
+          left={
+            <Field icon="send-outline" iconColor="#D97706" label="Departs Stopover" noBox>
+              <DateField label="" value={stop.departure_time} onChange={(iso) => upd('departure_time', iso)} mode="datetime" placeholder="Not set" accentColor="#D97706" />
+            </Field>
+          }
+          right={
+            <Field icon="flag-outline" iconColor="#D97706" label="Arrives Destination" noBox>
+              <DateField label="" value={stop.arrival_time} onChange={(iso) => upd('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor="#D97706" />
+            </Field>
+          }
+        />
+      </View>
+    </View>
+  );
+}
+
 // ─── Styles ───────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -1189,6 +1321,19 @@ const styles = StyleSheet.create({
   toggleSub: { fontSize: 11, color: colors.textTertiary, marginTop: 1 },
   toggleRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   toggleStatus: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Add connection button
+  addConnectionBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11,
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+  },
+  addConnectionIcon: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center',
+  },
+  addConnectionText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#D97706' },
 
   // PDF
   pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, padding: 14, backgroundColor: '#fff', shadowColor: '#1A56DB', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
@@ -1332,4 +1477,32 @@ const fld = StyleSheet.create({
   },
   regionRowLabel: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
   regionRowSub: { fontSize: 12, color: '#94A3B8', lineHeight: 16 },
+});
+
+// Connection card styles
+const conn = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: '#FEF3C7',
+    borderBottomWidth: 1, borderBottomColor: '#FDE68A',
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconWrap: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: '#FDE68A', justifyContent: 'center', alignItems: 'center',
+  },
+  headerText: { fontSize: 13, fontWeight: '800', color: '#92400E' },
+  removeBtn: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center',
+  },
+  body: { padding: 12, gap: 10 },
 });

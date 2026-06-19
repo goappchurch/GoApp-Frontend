@@ -28,7 +28,7 @@ import {
   createTask,
   toggleTask,
 } from '../../services/events';
-import { Event, Note, Task } from '../../types';
+import { Event, Note, Task, ConnectionStop } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -607,6 +607,8 @@ export default function EventDetailScreen() {
                 departure={t.departure_time ? fmt(t.departure_time) : undefined}
                 checkin={t.checkin_time ? fmt(t.checkin_time) : undefined}
                 arrival={t.arrival_time ? fmt(t.arrival_time) : undefined}
+                connections={t.connections}
+                fmt={fmt}
                 pdfUrl={t.flight_ticket_url ?? undefined}
                 pdfColor="#7C3AED"
               />
@@ -627,6 +629,8 @@ export default function EventDetailScreen() {
                 departure={t.return_departure_time ? fmt(t.return_departure_time) : undefined}
                 checkin={t.return_checkin_time ? fmt(t.return_checkin_time) : undefined}
                 arrival={t.return_arrival_time ? fmt(t.return_arrival_time) : undefined}
+                connections={t.return_connections}
+                fmt={fmt}
                 pdfUrl={t.return_ticket_pdf_url ?? undefined}
                 pdfColor="#059669"
                 pdfLabel="View Return Ticket PDF"
@@ -981,14 +985,19 @@ const edb = StyleSheet.create({
 // ── Premium flight card ──
 function FlightCard({
   color1, color2, status, airline, flightNumber,
-  from, to, departure, checkin, arrival, pdfUrl, pdfColor, pdfLabel,
+  from, to, departure, checkin, arrival, connections, fmt, pdfUrl, pdfColor, pdfLabel,
 }: {
   color1: string; color2: string; status: string;
   airline?: string | null; flightNumber?: string | null;
   from?: string | null; to?: string | null;
   departure?: string; checkin?: string; arrival?: string;
+  connections?: ConnectionStop[] | null;
+  fmt?: (iso: string) => string;
   pdfUrl?: string; pdfColor: string; pdfLabel?: string;
 }) {
+  const stops = (connections ?? []).filter(
+    (s) => s.airport || s.flight_number || s.airline || s.departure_time || s.arrival_time
+  );
   return (
     <View style={fc.ticket}>
       <LinearGradient colors={[color1, color2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={fc.header}>
@@ -1029,6 +1038,39 @@ function FlightCard({
             <Text style={fc.codeLabel}>To</Text>
           </View>
         </View>
+
+        {/* Connecting flights */}
+        {stops.length > 0 && (
+          <View style={fc.stops}>
+            <View style={fc.stopsHeader}>
+              <Ionicons name="git-branch-outline" size={12} color={color1} />
+              <Text style={[fc.stopsTitle, { color: color1 }]}>
+                {stops.length === 1 ? '1 Connecting Flight' : `${stops.length} Connecting Flights`}
+              </Text>
+            </View>
+            {stops.map((s, i) => (
+              <View key={i} style={fc.stopRow}>
+                <View style={[fc.stopDot, { borderColor: color1 }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={fc.stopAirport}>
+                    {s.airport || `Stop ${i + 1}`}
+                    {(s.airline || s.flight_number) ? (
+                      <Text style={fc.stopFlight}>{`   ${[s.airline, s.flight_number].filter(Boolean).join(' · ')}`}</Text>
+                    ) : null}
+                  </Text>
+                  {(s.arrival_time || s.departure_time) && (
+                    <Text style={fc.stopTimes}>
+                      {[
+                        s.arrival_time && fmt ? `Arr ${fmt(s.arrival_time)}` : null,
+                        s.departure_time && fmt ? `Dep ${fmt(s.departure_time)}` : null,
+                      ].filter(Boolean).join('   ·   ')}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Time rows */}
         {(departure || checkin || arrival) && (
@@ -1107,6 +1149,14 @@ const fc = StyleSheet.create({
   timeValue: { fontSize: 13, color: '#111827', fontWeight: '800' },
   pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   pdfText: { fontWeight: '600', fontSize: 13 },
+  stops: { backgroundColor: '#FFFBEB', borderRadius: 12, padding: 10, gap: 8, borderWidth: 1, borderColor: '#FDE68A' },
+  stopsHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  stopsTitle: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
+  stopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  stopDot: { width: 8, height: 8, borderRadius: 4, borderWidth: 2, backgroundColor: '#fff', marginTop: 3 },
+  stopAirport: { fontSize: 13, fontWeight: '800', color: '#111827' },
+  stopFlight: { fontSize: 11, fontWeight: '600', color: '#92400E' },
+  stopTimes: { fontSize: 11, fontWeight: '600', color: '#94A3B8', marginTop: 2 },
 });
 
 // ── Not booked placeholder ──

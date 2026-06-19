@@ -80,6 +80,14 @@ export interface EventOrganizer {
   email?: string;
 }
 
+export interface ConnectionStop {
+  airport?: string;
+  flight_number?: string;
+  airline?: string;
+  departure_time?: string;
+  arrival_time?: string;
+}
+
 export interface Travel {
   id: string;
   event_id: string;
@@ -92,6 +100,7 @@ export interface Travel {
   checkin_time?: string;
   arrival_time?: string;
   flight_ticket_url?: string;
+  connections?: ConnectionStop[];
   return_flight_booked?: boolean;
   return_boarding_point?: string;
   return_deboarding_point?: string;
@@ -101,6 +110,7 @@ export interface Travel {
   return_checkin_time?: string;
   return_arrival_time?: string;
   return_ticket_pdf_url?: string;
+  return_connections?: ConnectionStop[];
 }
 
 export interface Accommodation {
@@ -185,6 +195,7 @@ export interface EventFormData {
   flight_checkin_time?: string;
   arrival_time?: string;
   ticket_pdf_url?: string;
+  connections?: ConnectionStop[];
   // travel (return)
   return_flight_booked?: boolean;
   return_boarding_point?: string;
@@ -195,6 +206,7 @@ export interface EventFormData {
   return_flight_checkin_time?: string;
   return_arrival_time?: string;
   return_ticket_pdf_url?: string;
+  return_connections?: ConnectionStop[];
   // accommodation
   hotel_name?: string;
   hotel_address?: string;

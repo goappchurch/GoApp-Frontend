@@ -11,6 +11,7 @@ import {
   Document,
   Task,
   Notification,
+  ConnectionStop,
 } from '../types';
 
 export async function getEvents(): Promise<Event[]> {
@@ -143,6 +144,7 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
       checkin_time: formData.flight_checkin_time,
       arrival_time: formData.arrival_time,
       flight_ticket_url: formData.ticket_pdf_url,
+      connections: formData.connections ?? [],
       return_flight_booked: formData.return_flight_booked ?? false,
       return_boarding_point: formData.return_boarding_point,
       return_deboarding_point: formData.return_deboarding_point,
@@ -152,6 +154,7 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
       return_checkin_time: formData.return_flight_checkin_time,
       return_arrival_time: formData.return_arrival_time,
       return_ticket_pdf_url: formData.return_ticket_pdf_url,
+      return_connections: formData.return_connections ?? [],
     }),
     supabase.from('accommodation').insert({
       event_id: eventId,
@@ -215,6 +218,7 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
       checkin_time: formData.flight_checkin_time,
       arrival_time: formData.arrival_time,
       flight_ticket_url: formData.ticket_pdf_url,
+      connections: formData.connections ?? [],
       return_flight_booked: formData.return_flight_booked,
       return_boarding_point: formData.return_boarding_point,
       return_deboarding_point: formData.return_deboarding_point,
@@ -224,6 +228,7 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
       return_checkin_time: formData.return_flight_checkin_time,
       return_arrival_time: formData.return_arrival_time,
       return_ticket_pdf_url: formData.return_ticket_pdf_url,
+      return_connections: formData.return_connections ?? [],
     }, { onConflict: 'event_id' });
   }
 
