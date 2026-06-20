@@ -15,7 +15,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -65,7 +65,6 @@ function formatTime(iso: string | undefined) {
 
 export default function FlightsScreen() {
   const navigation = useNavigation<Nav>();
-  const insets = useSafeAreaInsets();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -123,7 +122,7 @@ export default function FlightsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primaryDarker} />
 
       {/* Gradient header */}
@@ -131,7 +130,7 @@ export default function FlightsScreen() {
         colors={gradients.header}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + 8 }]}
+        style={styles.header}
       >
         {/* Title row */}
         <View style={styles.headerRow}>
