@@ -105,3 +105,6 @@ tmp/
 temp/
 # Web build output
 dist/
+
+# Claude Code agent worktrees (local scratch checkouts)
+.claude/worktrees/
