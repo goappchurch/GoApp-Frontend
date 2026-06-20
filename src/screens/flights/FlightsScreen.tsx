@@ -105,8 +105,11 @@ export default function FlightsScreen() {
     [startOfToday]
   );
 
+  // Only show a trip card when a flight is actually booked — not merely
+  // because the event type is "travel". A trip with the flight toggle off
+  // should not appear here.
   const hasFlight = useCallback(
-    (e: Event) => !!(e.travel?.flight_booked || e.travel?.return_flight_booked || e.event_type === 'travel'),
+    (e: Event) => !!(e.travel?.flight_booked || e.travel?.return_flight_booked),
     []
   );
 
