@@ -68,6 +68,10 @@ export default function DateField({
     const day = +dm[1], month = +dm[2], year = +dm[3];
     if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900) return;
 
+    // Reject impossible dates (e.g. 31/02) — JS would silently roll them over
+    const check = new Date(year, month - 1, day);
+    if (check.getFullYear() !== year || check.getMonth() !== month - 1 || check.getDate() !== day) return;
+
     if (mode === 'date') {
       selfEmit.current = true;
       onChange(`${year}-${pad(month)}-${pad(day)}`);
