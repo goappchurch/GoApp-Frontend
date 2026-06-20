@@ -166,7 +166,7 @@ export default function EventsListScreen() {
         colors={gradients.header}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.hero, { paddingTop: insets.top + 14 }]}
+        style={[styles.hero, { paddingTop: insets.top + 8 }]}
       >
         {/* Title row */}
         <View style={styles.heroBar}>

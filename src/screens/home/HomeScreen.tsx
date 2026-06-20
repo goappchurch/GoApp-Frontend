@@ -109,7 +109,11 @@ export default function HomeScreen() {
   const [regionFilter, setRegionFilter] = useState<string | null>(null);
   const heroScrollRef = useRef<ScrollView>(null);
 
-  const CARD_W = Dimensions.get('window').width - 40;
+  // Measure the carousel viewport from layout instead of trusting the raw
+  // window width — guarantees each card matches the visible width exactly so
+  // it can never be clipped on the right edge.
+  const [cardW, setCardW] = useState(Dimensions.get('window').width - 40);
+  const CARD_W = cardW;
   const heroEvents = upcomingEvents.slice(0, 10);
   // append first card at end so swipe past last loops back seamlessly
   const carouselEvents = heroEvents.length > 0 ? [...heroEvents, heroEvents[0]] : [];
@@ -150,7 +154,7 @@ export default function HomeScreen() {
           locations={[0, 0.4, 0.8, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
-          style={[styles.hero, { paddingTop: insets.top + 14 }]}
+          style={[styles.hero, { paddingTop: insets.top + 8 }]}
         >
           {/* App bar */}
           <View style={styles.appBar}>
@@ -203,7 +207,13 @@ export default function HomeScreen() {
 
           {/* Next Event carousel inside hero */}
           {!loading && (
-            <View style={styles.heroCardWrap}>
+            <View
+              style={styles.heroCardWrap}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                if (w > 0 && Math.abs(w - cardW) > 0.5) setCardW(w);
+              }}
+            >
               <View style={styles.heroCardLabel}>
                 <Ionicons name="flash" size={12} color="rgba(255,255,255,0.7)" />
                 <Text style={styles.heroCardLabelText}>Upcoming Events</Text>
