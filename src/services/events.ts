@@ -96,7 +96,7 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
       event_type: formData.event_type,
       status: formData.status ?? 'confirmed',
       date_start: formData.date_start,
-      date_end: formData.date_end,
+      date_end: formData.date_end || null,
       timezone: formData.timezone || 'Asia/Kolkata',
       speaking_topic: formData.speaking_topic,
       expected_audience: formData.expected_audience,
@@ -136,9 +136,9 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
       arrival_airport: formData.arrival_airport,
       flight_number: formData.flight_number,
       airline: formData.airline,
-      departure_time: formData.departure_time,
-      checkin_time: formData.flight_checkin_time,
-      arrival_time: formData.arrival_time,
+      departure_time: formData.departure_time || null,
+      checkin_time: formData.flight_checkin_time || null,
+      arrival_time: formData.arrival_time || null,
       flight_ticket_url: formData.ticket_pdf_url,
       connections: formData.connections ?? [],
       return_flight_booked: formData.return_flight_booked ?? false,
@@ -146,9 +146,9 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
       return_deboarding_point: formData.return_deboarding_point,
       return_flight_number: formData.return_flight_number,
       return_airline: formData.return_airline,
-      return_departure_time: formData.return_departure_time,
-      return_checkin_time: formData.return_flight_checkin_time,
-      return_arrival_time: formData.return_arrival_time,
+      return_departure_time: formData.return_departure_time || null,
+      return_checkin_time: formData.return_flight_checkin_time || null,
+      return_arrival_time: formData.return_arrival_time || null,
       return_ticket_pdf_url: formData.return_ticket_pdf_url,
       return_connections: formData.return_connections ?? [],
       return_checkin_airport: formData.return_checkin_airport,
@@ -172,7 +172,7 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
   if (formData.event_type !== undefined) eventUpdates.event_type = formData.event_type;
   if (formData.status !== undefined) eventUpdates.status = formData.status;
   if (formData.date_start !== undefined) eventUpdates.date_start = formData.date_start;
-  if (formData.date_end !== undefined) eventUpdates.date_end = formData.date_end;
+  if (formData.date_end !== undefined) eventUpdates.date_end = formData.date_end || null;
   if (formData.timezone !== undefined) eventUpdates.timezone = formData.timezone;
   if (formData.speaking_topic !== undefined) eventUpdates.speaking_topic = formData.speaking_topic;
   if (formData.expected_audience !== undefined) eventUpdates.expected_audience = formData.expected_audience;
@@ -235,7 +235,10 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
   ];
   const travelPayload: Record<string, unknown> = {};
   for (const [formKey, col] of travelMap) {
-    if (formData[formKey] !== undefined) travelPayload[col] = formData[formKey];
+    if (formData[formKey] !== undefined) {
+      // Empty string (cleared field) → null so timestamp/text columns blank out
+      travelPayload[col] = formData[formKey] === '' ? null : formData[formKey];
+    }
   }
   if (Object.keys(travelPayload).length > 0) {
     await supabase.from('travel').upsert(

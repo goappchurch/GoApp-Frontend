@@ -63,6 +63,8 @@ export default function DateField({
   }, [value, mode]);
 
   const commit = (dText: string, tText: string, ap: 'AM' | 'PM') => {
+    // Field cleared → emit empty so the parent can blank the value
+    if (dText.trim() === '') { selfEmit.current = true; onChange(''); return; }
     const dm = dText.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
     if (!dm) return; // incomplete date — wait for full DD/MM/YYYY
     const day = +dm[1], month = +dm[2], year = +dm[3];

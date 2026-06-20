@@ -31,7 +31,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import { colors, shadow, radius, eventTypeLabels } from '../../constants/theme';
-import { shareViaWhatsApp, ticketMessage } from '../../utils/share';
 import { getLoadingVerse } from '../../constants/verses';
 
 type RouteProps = RouteProp<RootStackParamList, 'EventDetail'>;
@@ -1128,27 +1127,14 @@ function FlightCard({
               </View>
             )}
 
-            {/* Per-leg ticket: view + share to WhatsApp */}
+            {/* Per-leg ticket: view only (sharing is done from the flight card) */}
             {leg.ticketUrl && (
-              <View style={fc.ticketActions}>
-                <TouchableOpacity style={fc.ticketViewBtn} onPress={() => Linking.openURL(leg.ticketUrl!)} activeOpacity={0.85}>
-                  <Ionicons name="document-text-outline" size={15} color={pdfColor} />
-                  <Text style={[fc.pdfText, { color: pdfColor }]}>
-                    {hasStops ? `Flight ${i + 1} Ticket` : 'View Ticket'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={fc.waBtn}
-                  onPress={() => shareViaWhatsApp(ticketMessage(
-                    hasStops ? `Flight ${i + 1}: ${leg.from ?? ''} → ${leg.to ?? ''}` : 'Ticket',
-                    leg.ticketUrl!, eventTitle,
-                  ))}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                  <Text style={fc.waText}>Share</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={fc.pdfBtn} onPress={() => Linking.openURL(leg.ticketUrl!)} activeOpacity={0.85}>
+                <Ionicons name="document-text-outline" size={15} color={pdfColor} />
+                <Text style={[fc.pdfText, { color: pdfColor }]}>
+                  {hasStops ? `Flight ${i + 1} Ticket` : 'View Ticket'}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
         ))}

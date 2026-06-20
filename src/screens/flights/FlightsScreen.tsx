@@ -22,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { getEvents } from '../../services/events';
 import { Event, ConnectionStop } from '../../types';
-import { shareViaWhatsApp, ticketMessage } from '../../utils/share';
+import { shareViaWhatsApp, tripShareMessage, FlightShareLeg } from '../../utils/share';
 import { colors, shadow, radius, gradients } from '../../constants/theme';
 import { getLoadingVerse } from '../../constants/verses';
 
@@ -400,18 +400,12 @@ export function FlightDetailModal({
                   {t.arrival_time && <DetailRow icon="enter-outline" label="Arrival" value={fmt(t.arrival_time)} />}
                   {t.checkin_time && <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(t.checkin_time)} />}
                   {t.flight_ticket_url && (
-                    <View style={mStyles.ticketActionRow}>
-                      <TouchableOpacity style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]} onPress={() => Linking.openURL(t.flight_ticket_url!)}>
-                        <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
-                          <Ionicons name="document-text-outline" size={14} color="#fff" />
-                          <Text style={mStyles.ticketBtnText}>{outStops.length > 0 ? 'Leg 1 Ticket' : 'View Ticket'}</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={mStyles.waBtn} onPress={() => shareViaWhatsApp(ticketMessage('Outbound flight ticket', t.flight_ticket_url!, event.title))} activeOpacity={0.85}>
-                        <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                        <Text style={mStyles.waText}>Share</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity style={[mStyles.ticketBtn, { overflow: 'hidden', borderRadius: 10, marginTop: 6 }]} onPress={() => Linking.openURL(t.flight_ticket_url!)}>
+                      <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
+                        <Ionicons name="document-text-outline" size={14} color="#fff" />
+                        <Text style={mStyles.ticketBtnText}>{outStops.length > 0 ? 'Leg 1 Ticket' : 'View Ticket'}</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
                   )}
                   {outStops.map((stop, idx) => (
                     <React.Fragment key={idx}>
@@ -432,18 +426,12 @@ export function FlightDetailModal({
                       {stop.arrival_time && <DetailRow icon="enter-outline" label="Arrival" value={fmt(stop.arrival_time)} />}
                       {stop.checkin_time && <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(stop.checkin_time)} />}
                       {stop.ticket_url && (
-                        <View style={mStyles.ticketActionRow}>
-                          <TouchableOpacity style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]} onPress={() => Linking.openURL(stop.ticket_url!)}>
-                            <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
-                              <Ionicons name="document-text-outline" size={14} color="#fff" />
-                              <Text style={mStyles.ticketBtnText}>Leg {idx + 2} Ticket</Text>
-                            </LinearGradient>
-                          </TouchableOpacity>
-                          <TouchableOpacity style={mStyles.waBtn} onPress={() => shareViaWhatsApp(ticketMessage(`Leg ${idx + 2}${stop.airport ? ` · ${stop.airport}` : ''}`, stop.ticket_url!, event.title))} activeOpacity={0.85}>
-                            <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                            <Text style={mStyles.waText}>Share</Text>
-                          </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity style={[mStyles.ticketBtn, { overflow: 'hidden', borderRadius: 10, marginTop: 6 }]} onPress={() => Linking.openURL(stop.ticket_url!)}>
+                          <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
+                            <Ionicons name="document-text-outline" size={14} color="#fff" />
+                            <Text style={mStyles.ticketBtnText}>Leg {idx + 2} Ticket</Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
                       )}
                     </React.Fragment>
                   ))}
@@ -490,18 +478,12 @@ export function FlightDetailModal({
                   {t.return_arrival_time && <DetailRow icon="enter-outline" label="Arrival" value={fmt(t.return_arrival_time)} valueColor="#059669" />}
                   {t.return_checkin_time && <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(t.return_checkin_time)} valueColor="#059669" />}
                   {t.return_ticket_pdf_url && (
-                    <View style={mStyles.ticketActionRow}>
-                      <TouchableOpacity style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]} onPress={() => Linking.openURL(t.return_ticket_pdf_url!)}>
-                        <LinearGradient colors={['#059669', '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
-                          <Ionicons name="document-text-outline" size={14} color="#fff" />
-                          <Text style={mStyles.ticketBtnText}>{retStops.length > 0 ? 'Leg 1 Ticket' : 'View Return Ticket'}</Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={mStyles.waBtn} onPress={() => shareViaWhatsApp(ticketMessage('Return flight ticket', t.return_ticket_pdf_url!, event.title))} activeOpacity={0.85}>
-                        <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                        <Text style={mStyles.waText}>Share</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity style={[mStyles.ticketBtn, { overflow: 'hidden', borderRadius: 10, marginTop: 6 }]} onPress={() => Linking.openURL(t.return_ticket_pdf_url!)}>
+                      <LinearGradient colors={['#059669', '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
+                        <Ionicons name="document-text-outline" size={14} color="#fff" />
+                        <Text style={mStyles.ticketBtnText}>{retStops.length > 0 ? 'Leg 1 Ticket' : 'View Return Ticket'}</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
                   )}
                   {retStops.map((stop, idx) => (
                     <React.Fragment key={idx}>
@@ -522,18 +504,12 @@ export function FlightDetailModal({
                       {stop.arrival_time && <DetailRow icon="enter-outline" label="Arrival" value={fmt(stop.arrival_time)} valueColor="#059669" />}
                       {stop.checkin_time && <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(stop.checkin_time)} valueColor="#059669" />}
                       {stop.ticket_url && (
-                        <View style={mStyles.ticketActionRow}>
-                          <TouchableOpacity style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]} onPress={() => Linking.openURL(stop.ticket_url!)}>
-                            <LinearGradient colors={['#059669', '#16A34A'] as [string,string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
-                              <Ionicons name="document-text-outline" size={14} color="#fff" />
-                              <Text style={mStyles.ticketBtnText}>Leg {idx + 2} Ticket</Text>
-                            </LinearGradient>
-                          </TouchableOpacity>
-                          <TouchableOpacity style={mStyles.waBtn} onPress={() => shareViaWhatsApp(ticketMessage(`Leg ${idx + 2}${stop.airport ? ` · ${stop.airport}` : ''}`, stop.ticket_url!, event.title))} activeOpacity={0.85}>
-                            <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                            <Text style={mStyles.waText}>Share</Text>
-                          </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity style={[mStyles.ticketBtn, { overflow: 'hidden', borderRadius: 10, marginTop: 6 }]} onPress={() => Linking.openURL(stop.ticket_url!)}>
+                          <LinearGradient colors={['#059669', '#16A34A'] as [string,string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
+                            <Ionicons name="document-text-outline" size={14} color="#fff" />
+                            <Text style={mStyles.ticketBtnText}>Leg {idx + 2} Ticket</Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
                       )}
                     </React.Fragment>
                   ))}
@@ -684,6 +660,53 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
 
   const fmtDT = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString('en', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+
+  const t2 = event.travel;
+  const canShare = !!(t2?.flight_booked || t2?.return_flight_booked);
+
+  const shareTrip = () => {
+    if (!t2) return;
+    const sections: { title: string; legs: FlightShareLeg[] }[] = [];
+    if (t2.flight_booked) {
+      const legs: FlightShareLeg[] = [{
+        label: outStops.length ? 'Leg 1' : null,
+        from: origin, to: outStops[0]?.airport ?? destination,
+        fromAirport: t2.checkin_airport, toAirport: outStops[0]?.airport_name ?? t2.arrival_airport,
+        airline: t2.airline, flightNumber: t2.flight_number,
+        checkin: t2.checkin_time, departure: t2.departure_time, arrival: t2.arrival_time,
+        ticketUrl: t2.flight_ticket_url,
+      }];
+      outStops.forEach((s, idx) => legs.push({
+        label: `Leg ${idx + 2}`,
+        from: s.airport, to: outStops[idx + 1]?.airport ?? destination,
+        fromAirport: s.airport_name, toAirport: outStops[idx + 1]?.airport_name ?? t2.arrival_airport,
+        airline: s.airline, flightNumber: s.flight_number,
+        checkin: s.checkin_time, departure: s.departure_time, arrival: s.arrival_time,
+        ticketUrl: s.ticket_url,
+      }));
+      sections.push({ title: 'OUTBOUND', legs });
+    }
+    if (t2.return_flight_booked) {
+      const legs: FlightShareLeg[] = [{
+        label: retStops.length ? 'Leg 1' : null,
+        from: returnOrigin, to: retStops[0]?.airport ?? returnDest,
+        fromAirport: t2.return_checkin_airport, toAirport: retStops[0]?.airport_name ?? t2.return_arrival_airport,
+        airline: t2.return_airline, flightNumber: t2.return_flight_number,
+        checkin: t2.return_checkin_time, departure: t2.return_departure_time, arrival: t2.return_arrival_time,
+        ticketUrl: t2.return_ticket_pdf_url,
+      }];
+      retStops.forEach((s, idx) => legs.push({
+        label: `Leg ${idx + 2}`,
+        from: s.airport, to: retStops[idx + 1]?.airport ?? returnDest,
+        fromAirport: s.airport_name, toAirport: retStops[idx + 1]?.airport_name ?? t2.return_arrival_airport,
+        airline: s.airline, flightNumber: s.flight_number,
+        checkin: s.checkin_time, departure: s.departure_time, arrival: s.arrival_time,
+        ticketUrl: s.ticket_url,
+      }));
+      sections.push({ title: 'RETURN', legs });
+    }
+    shareViaWhatsApp(tripShareMessage(event.title, sections));
+  };
 
   return (
     <TouchableOpacity style={[styles.card, shadow.sm]} onPress={onPress} activeOpacity={0.88}>
@@ -948,25 +971,16 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
         {outStops.length === 0 && (
           <View style={styles.ticketGroup}>
             {event.travel?.flight_ticket_url ? (
-              <View style={styles.ticketBtnRow}>
-                <TouchableOpacity
-                  style={styles.ticketBtn}
-                  onPress={() => Linking.openURL(event.travel!.flight_ticket_url!)}
-                  activeOpacity={0.82}
-                >
-                  <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ticketBtnGrad}>
-                    <Ionicons name="document-text-outline" size={14} color="#fff" />
-                    <Text style={styles.ticketBtnText}>View Ticket</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.cardWaBtn}
-                  onPress={() => shareViaWhatsApp(ticketMessage('Outbound flight ticket', event.travel!.flight_ticket_url!, event.title))}
-                  activeOpacity={0.82}
-                >
-                  <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.ticketBtn}
+                onPress={() => Linking.openURL(event.travel!.flight_ticket_url!)}
+                activeOpacity={0.82}
+              >
+                <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ticketBtnGrad}>
+                  <Ionicons name="document-text-outline" size={14} color="#fff" />
+                  <Text style={styles.ticketBtnText}>View Ticket</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             ) : (
               <View style={styles.noTicket}>
                 <Ionicons name="document-outline" size={13} color={colors.textTertiary} />
@@ -974,27 +988,24 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
               </View>
             )}
             {hasReturn && event.travel?.return_ticket_pdf_url && (
-              <View style={styles.ticketBtnRow}>
-                <TouchableOpacity
-                  style={styles.ticketBtn}
-                  onPress={() => Linking.openURL(event.travel!.return_ticket_pdf_url!)}
-                  activeOpacity={0.82}
-                >
-                  <LinearGradient colors={['#059669', '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ticketBtnGrad}>
-                    <Ionicons name="document-text-outline" size={14} color="#fff" />
-                    <Text style={styles.ticketBtnText}>Return Ticket</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.cardWaBtn, { backgroundColor: '#059669' }]}
-                  onPress={() => shareViaWhatsApp(ticketMessage('Return flight ticket', event.travel!.return_ticket_pdf_url!, event.title))}
-                  activeOpacity={0.82}
-                >
-                  <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.ticketBtn}
+                onPress={() => Linking.openURL(event.travel!.return_ticket_pdf_url!)}
+                activeOpacity={0.82}
+              >
+                <LinearGradient colors={['#059669', '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ticketBtnGrad}>
+                  <Ionicons name="document-text-outline" size={14} color="#fff" />
+                  <Text style={styles.ticketBtnText}>Return Ticket</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             )}
           </View>
+        )}
+        {canShare && (
+          <TouchableOpacity style={styles.shareTripBtn} onPress={shareTrip} activeOpacity={0.82}>
+            <Ionicons name="logo-whatsapp" size={15} color="#fff" />
+            <Text style={styles.shareTripText}>Share</Text>
+          </TouchableOpacity>
         )}
         <TouchableOpacity style={styles.detailBtn} onPress={onPress} activeOpacity={0.82}>
           <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.detailBtnGrad}>
@@ -1212,8 +1223,11 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   ticketGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ticketBtnRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardWaBtn: { backgroundColor: '#25D366', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
+  shareTripBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#25D366', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9,
+  },
+  shareTripText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   ticketBtn: { flex: 1, borderRadius: 10, overflow: 'hidden' },
   ticketBtnGrad: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
