@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   Linking,
   Image,
@@ -14,6 +13,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
+import { showAlert } from '../../utils/alert';
 import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -122,7 +122,7 @@ export default function EventDetailScreen() {
       const ev = await getEventById(route.params.eventId);
       setEvent(ev);
     } catch (e) {
-      Alert.alert('Error', 'Could not load event');
+      showAlert('Error', 'Could not load event');
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -151,7 +151,7 @@ export default function EventDetailScreen() {
         if (Platform.OS === 'web') {
           window.alert(e?.message ?? 'Could not delete event');
         } else {
-          Alert.alert('Error', e?.message ?? 'Could not delete event');
+          showAlert('Error', e?.message ?? 'Could not delete event');
         }
       }
     };
@@ -161,7 +161,7 @@ export default function EventDetailScreen() {
         await doDelete();
       }
     } else {
-      Alert.alert(
+      showAlert(
         'Delete Event',
         `Are you sure you want to delete "${event?.title}"? This cannot be undone.`,
         [
@@ -180,7 +180,7 @@ export default function EventDetailScreen() {
       await confirmEvent(event.id);
       setEvent(prev => prev ? { ...prev, status: 'confirmed' } : prev);
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Could not confirm event');
+      showAlert('Error', e?.message ?? 'Could not confirm event');
     } finally {
       setConfirming(false);
     }
@@ -226,7 +226,7 @@ export default function EventDetailScreen() {
         await Sharing.shareAsync(asset.localUri, { mimeType: `image/${ext}`, dialogTitle: event.title });
       }
     } catch (e: any) {
-      if (e?.name !== 'AbortError') Alert.alert('Could not share poster', 'Try opening it and sharing from there.');
+      if (e?.name !== 'AbortError') showAlert('Could not share poster', 'Try opening it and sharing from there.');
     } finally {
       setSharingPoster(false);
     }
@@ -327,7 +327,7 @@ export default function EventDetailScreen() {
           // Copy text to clipboard so user can paste as caption in WhatsApp
           await Clipboard.setStringAsync(msg);
           const ext = asset.localUri.endsWith('.png') ? 'png' : 'jpg';
-          Alert.alert(
+          showAlert(
             'Details Copied ✓',
             'Event details copied to clipboard. Pick WhatsApp in the share sheet and paste as caption.',
             [{ text: 'Continue', onPress: () =>

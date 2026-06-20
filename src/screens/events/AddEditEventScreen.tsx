@@ -7,11 +7,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Alert,
   ActivityIndicator,
   Image,
   Modal,
 } from 'react-native';
+import { showAlert } from '../../utils/alert';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -232,7 +232,7 @@ export default function AddEditEventScreen() {
       });
       if (event.poster_url) setPosterUri(event.poster_url);
     } catch (e) {
-      Alert.alert('Error', 'Could not load event data');
+      showAlert('Error', 'Could not load event data');
     } finally {
       setLoading(false);
     }
@@ -275,7 +275,7 @@ export default function AddEditEventScreen() {
         hotel_address: event.accommodation?.address,
       });
     } catch (e) {
-      Alert.alert('Error', 'Could not load event data for duplication');
+      showAlert('Error', 'Could not load event data for duplication');
     } finally {
       setLoading(false);
     }
@@ -312,7 +312,7 @@ export default function AddEditEventScreen() {
 
   const handlePickPoster = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission needed', 'Allow photo access to upload a poster'); return; }
+    if (status !== 'granted') { showAlert('Permission needed', 'Allow photo access to upload a poster'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images',
       quality: 0.9,
@@ -328,7 +328,7 @@ export default function AddEditEventScreen() {
         await updateEvent(route.params.eventId, { poster_url: url });
         set('poster_url', url);
       } catch (e: any) {
-        Alert.alert('Upload failed', e?.message ?? 'Could not upload poster');
+        showAlert('Upload failed', e?.message ?? 'Could not upload poster');
       } finally {
         setUploadingPoster(false);
       }
@@ -347,7 +347,7 @@ export default function AddEditEventScreen() {
         await updateEvent(route.params.eventId, { flight_booked: true, ticket_pdf_url: url } as any);
         set('ticket_pdf_url', url);
       } catch (e: any) {
-        Alert.alert('Upload failed', e?.message ?? 'Could not upload ticket');
+        showAlert('Upload failed', e?.message ?? 'Could not upload ticket');
       } finally {
         setUploadingPdf(false);
       }
@@ -366,7 +366,7 @@ export default function AddEditEventScreen() {
         await updateEvent(route.params.eventId, { return_flight_booked: true, return_ticket_pdf_url: url } as any);
         set('return_ticket_pdf_url', url);
       } catch (e: any) {
-        Alert.alert('Upload failed', e?.message ?? 'Could not upload return ticket');
+        showAlert('Upload failed', e?.message ?? 'Could not upload return ticket');
       } finally {
         setUploadingReturnPdf(false);
       }
@@ -403,7 +403,7 @@ export default function AddEditEventScreen() {
           return next;
         })() } as any);
       } catch (e: any) {
-        Alert.alert('Upload failed', e?.message ?? 'Could not upload ticket');
+        showAlert('Upload failed', e?.message ?? 'Could not upload ticket');
       } finally {
         setConnUploading((m) => ({ ...m, [key]: false }));
       }
@@ -424,10 +424,10 @@ export default function AddEditEventScreen() {
 
   const handleSave = async () => {
     if (saving) return;
-    if (!form.title.trim()) { Alert.alert('Required', 'Event title is required'); return; }
+    if (!form.title.trim()) { showAlert('Required', 'Event title is required'); return; }
     if (!user) return;
     if (!isEdit && checkConflict()) {
-      Alert.alert(
+      showAlert(
         'Date Conflict',
         'A confirmed event already exists on this date. Save anyway?',
         [{ text: 'Cancel', style: 'cancel' }, { text: 'Save Anyway', onPress: doSave }]
@@ -451,7 +451,7 @@ export default function AddEditEventScreen() {
             const url = await uploadEventPoster(posterUri, event.id);
             await updateEvent(event.id, { poster_url: url });
           } catch (uploadErr: any) {
-            Alert.alert('Poster upload failed', uploadErr?.message ?? 'Event saved without poster.');
+            showAlert('Poster upload failed', uploadErr?.message ?? 'Event saved without poster.');
           }
         }
         if (ticketUri && !form.ticket_pdf_url) {
@@ -459,7 +459,7 @@ export default function AddEditEventScreen() {
             const url = await uploadTicketPdf(ticketUri, event.id);
             await updateEvent(event.id, { flight_booked: true, ticket_pdf_url: url } as any);
           } catch (uploadErr: any) {
-            Alert.alert('Ticket upload failed', uploadErr?.message ?? 'Event saved without ticket.');
+            showAlert('Ticket upload failed', uploadErr?.message ?? 'Event saved without ticket.');
           }
         }
         if (returnTicketUri && !form.return_ticket_pdf_url) {
@@ -467,7 +467,7 @@ export default function AddEditEventScreen() {
             const url = await uploadTicketPdf(returnTicketUri, event.id, 'return-ticket');
             await updateEvent(event.id, { return_flight_booked: true, return_ticket_pdf_url: url } as any);
           } catch (uploadErr: any) {
-            Alert.alert('Return ticket upload failed', uploadErr?.message ?? 'Event saved without return ticket.');
+            showAlert('Return ticket upload failed', uploadErr?.message ?? 'Event saved without return ticket.');
           }
         }
         // Upload any connecting-flight tickets picked before the event existed
@@ -483,7 +483,7 @@ export default function AddEditEventScreen() {
               if (legPrefix === 'out' && outbound[idx]) outbound[idx] = { ...outbound[idx], ticket_url: url };
               if (legPrefix === 'ret' && inbound[idx]) inbound[idx] = { ...inbound[idx], ticket_url: url };
             } catch (uploadErr: any) {
-              Alert.alert('Connection ticket upload failed', uploadErr?.message ?? 'Event saved without one connection ticket.');
+              showAlert('Connection ticket upload failed', uploadErr?.message ?? 'Event saved without one connection ticket.');
             }
           }
           connTicketUris.current = {};
@@ -501,7 +501,7 @@ export default function AddEditEventScreen() {
       }
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', isEdit ? 'Could not update event' : 'Could not create event');
+      showAlert('Error', isEdit ? 'Could not update event' : 'Could not create event');
     } finally {
       setSaving(false);
     }
@@ -837,7 +837,7 @@ export default function AddEditEventScreen() {
                         s => s.airport || s.flight_number || s.airline || s.departure_time || s.arrival_time || s.ticket_url
                       );
                       if (hasData) {
-                        Alert.alert('Remove connections?', 'All connecting leg data will be cleared.', [
+                        showAlert('Remove connections?', 'All connecting leg data will be cleared.', [
                           { text: 'Cancel', style: 'cancel' },
                           { text: 'Remove', style: 'destructive', onPress: () => set('connections', []) },
                         ]);
@@ -1044,7 +1044,7 @@ export default function AddEditEventScreen() {
                         s => s.airport || s.flight_number || s.airline || s.departure_time || s.arrival_time || s.ticket_url
                       );
                       if (hasData) {
-                        Alert.alert('Remove connections?', 'All return connecting leg data will be cleared.', [
+                        showAlert('Remove connections?', 'All return connecting leg data will be cleared.', [
                           { text: 'Cancel', style: 'cancel' },
                           { text: 'Remove', style: 'destructive', onPress: () => set('return_connections', []) },
                         ]);

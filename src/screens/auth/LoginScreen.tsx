@@ -5,12 +5,12 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { showAlert } from '../../utils/alert';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, radius, shadow } from '../../constants/theme';
@@ -24,7 +24,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Missing fields', 'Please enter your email and password');
+      showAlert('Missing fields', 'Please enter your email and password');
       return;
     }
     setLoading(true);
@@ -32,7 +32,7 @@ export default function LoginScreen() {
       await login(email.trim().toLowerCase(), password);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Login failed';
-      Alert.alert('Login Failed', message);
+      showAlert('Login Failed', message);
     } finally {
       setLoading(false);
     }

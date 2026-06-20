@@ -6,10 +6,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   Linking,
 } from 'react-native';
+import { showAlert } from '../../utils/alert';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,7 +61,7 @@ export default function ContactDetailScreen() {
   const set = (key: keyof Contact, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   const handleSave = async () => {
-    if (!form.full_name?.trim()) { Alert.alert('Required', 'Name is required'); return; }
+    if (!form.full_name?.trim()) { showAlert('Required', 'Name is required'); return; }
     if (!user) return;
     setSaving(true);
     try {
@@ -72,14 +72,14 @@ export default function ContactDetailScreen() {
       }
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', 'Could not save contact');
+      showAlert('Error', 'Could not save contact');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete Contact', 'This cannot be undone.', [
+    showAlert('Delete Contact', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
