@@ -5,7 +5,9 @@ export type EventType =
   | 'youth_conference'
   | 'workshop'
   | 'wedding'
-  | 'special_event';
+  | 'special_event'
+  | 'travel'
+  | 'personal';
 
 export type NoteType = 'text' | 'voice';
 
@@ -43,6 +45,7 @@ export interface Event {
   id: string;
   title: string;
   event_type: EventType;
+  status?: 'confirmed' | 'tentative' | 'rejected' | 'cancelled' | 'completed';
   date_start: string;
   date_end?: string;
   timezone: string;
@@ -83,9 +86,12 @@ export interface EventOrganizer {
 export interface ConnectionStop {
   airport?: string;        // place / city name
   airport_name?: string;   // airport name
+  checkin_airport?: string;
+  arrival_airport?: string;
   flight_number?: string;
   airline?: string;
   departure_time?: string;
+  checkin_time?: string;
   arrival_time?: string;
   ticket_url?: string;
 }
@@ -173,6 +179,7 @@ export interface Notification {
 export interface EventFormData {
   title: string;
   event_type: EventType;
+  status?: 'confirmed' | 'tentative';
   date_start: string;
   date_end?: string;
   timezone: string;

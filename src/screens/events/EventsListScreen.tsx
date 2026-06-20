@@ -18,7 +18,7 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, shadow, radius, eventTypeIcons, gradients } from '../../constants/theme';
 import { getLoadingVerse } from '../../constants/verses';
-import { getEvents } from '../../services/events';
+import { getEvents, confirmEvent } from '../../services/events';
 import { Event } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { RootStackParamList, MainTabParamList } from '../../navigation/AppNavigator';
@@ -57,6 +57,12 @@ export default function EventsListScreen() {
   const [search, setSearch] = useState('');
   const [timeFilters, setTimeFilters] = useState<string[]>(['upcoming']);
   const [regionFilters, setRegionFilters] = useState<string[]>([]);
+  const [tentativeOnly, setTentativeOnly] = useState(false);
+  const [typeFilters, setTypeFilters] = useState<string[]>([]);
+
+  function toggleType(val: string) {
+    setTypeFilters(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  }
 
   useFocusEffect(useCallback(() => {
     if (route.params?.filterToday) {
@@ -91,6 +97,16 @@ export default function EventsListScreen() {
     navigation.navigate('AddEditEvent', { duplicateFromId: event.id });
   }, [navigation]);
 
+  const handleConfirm = useCallback(async (event: Event) => {
+    setMenuEvent(null);
+    try {
+      await confirmEvent(event.id);
+      setEvents(prev => prev.map(e => e.id === event.id ? { ...e, status: 'confirmed' } : e));
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
   const startOfToday = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -100,16 +116,6 @@ export default function EventsListScreen() {
   const allRegions = useMemo(() =>
     [...new Set(events.map(e => e.venue?.region).filter(Boolean) as string[])].sort(),
     [events]
-  );
-
-  const upcomingCount = useMemo(
-    () => events.filter(e => new Date(e.date_start) >= startOfToday).length,
-    [events, startOfToday]
-  );
-
-  const pastCount = useMemo(
-    () => events.filter(e => new Date(e.date_start) < startOfToday).length,
-    [events, startOfToday]
   );
 
   const filtered = useMemo(() => {
@@ -124,11 +130,20 @@ export default function EventsListScreen() {
           (timeFilters.includes('past') && !isUpcoming);
         if (!matchesTime) return false;
       }
+      if (tentativeOnly && e.status !== 'tentative') return false;
+      if (typeFilters.length > 0) {
+        const isMinistry = e.event_type !== 'travel' && e.event_type !== 'personal';
+        const matchesType =
+          (typeFilters.includes('ministry') && isMinistry) ||
+          (typeFilters.includes('travel') && e.event_type === 'travel') ||
+          (typeFilters.includes('personal') && e.event_type === 'personal');
+        if (!matchesType) return false;
+      }
       if (regionFilters.length > 0 && !regionFilters.includes(e.venue?.region ?? '')) return false;
       if (search.trim() && !e.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [events, timeFilters, regionFilters, search, startOfToday]);
+  }, [events, timeFilters, regionFilters, tentativeOnly, typeFilters, search, startOfToday]);
 
   const sections = useMemo(() => {
     const byYear: Record<string, Event[]> = {};
@@ -158,17 +173,6 @@ export default function EventsListScreen() {
           <View>
             <Text style={styles.heroTitle}>Events</Text>
             <Text style={styles.heroSub}>All your speaking engagements</Text>
-          </View>
-          <View style={styles.heroStats}>
-            <View style={styles.statPill}>
-              <Text style={styles.statNum}>{loading ? '–' : upcomingCount}</Text>
-              <Text style={styles.statLabel}>Upcoming</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statPill}>
-              <Text style={styles.statNum}>{loading ? '–' : pastCount}</Text>
-              <Text style={styles.statLabel}>Past</Text>
-            </View>
           </View>
         </View>
 
@@ -240,6 +244,43 @@ export default function EventsListScreen() {
           >
             <Text style={[styles.chipText, timeFilters.length === 0 && styles.chipTextActive]}>All Events</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.chip, tentativeOnly && styles.chipTentativeActive]}
+            onPress={() => setTentativeOnly(p => !p)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="time-outline" size={11} color={tentativeOnly ? '#fff' : '#D97706'} />
+            <Text style={[styles.chipText, tentativeOnly && styles.chipTextActive]}>Tentative</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Type filter */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          <TouchableOpacity
+            style={[styles.chip, typeFilters.length === 0 && styles.chipActive]}
+            onPress={() => setTypeFilters([])}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.chipText, typeFilters.length === 0 && styles.chipTextActive]}>All Types</Text>
+          </TouchableOpacity>
+          {([
+            { key: 'ministry', label: 'Ministry', icon: 'mic-outline',      color: '#4F46E5' },
+            { key: 'travel',   label: 'Trip',      icon: 'airplane-outline', color: '#2563EB' },
+            { key: 'personal', label: 'Personal',  icon: 'person-outline',   color: '#DB2777' },
+          ] as const).map(({ key, label, icon, color }) => {
+            const active = typeFilters.includes(key);
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.chip, active && { backgroundColor: color, borderColor: color }]}
+                onPress={() => toggleType(key)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name={icon} size={11} color={active ? '#fff' : color} />
+                <Text style={[styles.chipText, active && styles.chipTextActive, !active && { color }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {/* Region filter */}
@@ -357,6 +398,22 @@ export default function EventsListScreen() {
           <View style={menuStyles.handle} />
           <Text style={menuStyles.eventTitle} numberOfLines={2}>{menuEvent?.title}</Text>
           <View style={menuStyles.divider} />
+          {menuEvent?.status === 'tentative' && (
+            <TouchableOpacity
+              style={menuStyles.option}
+              onPress={() => menuEvent && handleConfirm(menuEvent)}
+              activeOpacity={0.75}
+            >
+              <View style={[menuStyles.optionIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="checkmark-circle-outline" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={menuStyles.optionLabel}>Confirm Event</Text>
+                <Text style={menuStyles.optionSub}>Mark this event as confirmed and approved</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={menuStyles.option}
             onPress={() => menuEvent && handleDuplicate(menuEvent)}
@@ -381,8 +438,8 @@ export default function EventsListScreen() {
   );
 }
 
-function cardColors(_countdown: string | null, _isPast: boolean): [string, string] {
-  // Cards are solid white for a clean, professional look
+function cardColors(_countdown: string | null, _isPast: boolean, isPending = false): [string, string] {
+  if (isPending) return ['#FFFBEB', '#FFFBEB'];
   return ['#ffffff', '#ffffff'];
 }
 
@@ -406,9 +463,10 @@ function EventCard({
 }) {
   const { day, month } = dateBlock(event.date_start);
   const isPast = new Date(event.date_start) < now;
+  const isPending = event.status === 'tentative';
   const countdown = daysUntil(event.date_start);
-  const accent = cardAccent(countdown, isPast);
-  const gradientColors = cardColors(countdown, isPast);
+  const accent = isPending ? '#D97706' : cardAccent(countdown, isPast);
+  const gradientColors = cardColors(countdown, isPast, isPending);
 
   return (
     <TouchableOpacity
@@ -423,6 +481,7 @@ function EventCard({
         end={{ x: 1, y: 0 }}
         style={StyleSheet.absoluteFill}
       />
+      {isPending && <View style={styles.pendingStripe} />}
 
       {/* Date column */}
       <View style={styles.dateCol}>
@@ -462,6 +521,12 @@ function EventCard({
             <View style={styles.hotelBadge}>
               <Ionicons name="bed-outline" size={10} color={colors.primary} />
               <Text style={styles.hotelBadgeText}>Hotel</Text>
+            </View>
+          )}
+          {isPending && (
+            <View style={styles.pendingBadge}>
+              <Ionicons name="time-outline" size={10} color="#D97706" />
+              <Text style={styles.pendingBadgeText}>Pending</Text>
             </View>
           )}
         </View>
@@ -589,6 +654,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.danger,
     borderColor: colors.danger,
   },
+  chipTentativeActive: {
+    backgroundColor: '#D97706',
+    borderColor: '#D97706',
+  },
   chipText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   chipTextActive: { color: '#fff' },
 
@@ -701,6 +770,26 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   hotelBadgeText: { fontSize: 10, fontWeight: '700', color: colors.primary },
+
+  pendingStripe: {
+    position: 'absolute',
+    left: 0, top: 0, bottom: 0,
+    width: 4,
+    backgroundColor: '#D97706',
+    borderTopLeftRadius: radius.lg,
+    borderBottomLeftRadius: radius.lg,
+  },
+
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    borderRadius: radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  pendingBadgeText: { fontSize: 10, fontWeight: '700', color: '#D97706' },
 
   // Empty state
   emptyWrap: { alignItems: 'center', paddingTop: 60, gap: 10 },

@@ -267,6 +267,30 @@ export default function CalendarScreen() {
     return map;
   }, [events]);
 
+  const dateTravelMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (const ev of events) {
+      if (ev.event_type !== 'travel') continue;
+      const start = toDateStr(new Date(ev.date_start));
+      const end = ev.date_end ? toDateStr(new Date(ev.date_end)) : start;
+      let cur = start;
+      while (cur <= end) { map[cur] = true; cur = addDays(cur, 1); }
+    }
+    return map;
+  }, [events]);
+
+  const datePersonalMap = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (const ev of events) {
+      if (ev.event_type !== 'personal') continue;
+      const start = toDateStr(new Date(ev.date_start));
+      const end = ev.date_end ? toDateStr(new Date(ev.date_end)) : start;
+      let cur = start;
+      while (cur <= end) { map[cur] = true; cur = addDays(cur, 1); }
+    }
+    return map;
+  }, [events]);
+
   const eventsOnDay = useMemo(
     () => events.filter((e) => {
       const start = toDateStr(new Date(e.date_start));
@@ -573,6 +597,15 @@ export default function CalendarScreen() {
                         const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
                         const isPastCell = cellDate ? cellDate < startOfToday : false;
 
+                        // Priority: green (confirmed) > amber (pending) > grey (past)
+                        const spansForThisCol = spans.filter(s => ci >= s.startCol && ci <= s.endCol);
+                        const spanHasConfirmed = spansForThisCol.some(s => s.event.status !== 'tentative');
+                        const spanHasPending = spansForThisCol.some(s => s.event.status === 'tentative');
+                        const spanBgColor = isPastCell ? '#9CA3AF'
+                          : spanHasConfirmed ? '#22C55E'
+                          : spanHasPending ? '#F59E0B'
+                          : '#22C55E';
+
                         const spanBg = isInSpan ? (
                           <View
                             pointerEvents="none"
@@ -582,7 +615,7 @@ export default function CalendarScreen() {
                               right: roundRight ? 4 : 0,
                               top: 4,
                               bottom: 4,
-                              backgroundColor: isPastCell ? '#9CA3AF' : '#22C55E',
+                              backgroundColor: spanBgColor,
                               borderTopLeftRadius: roundLeft ? 20 : 0,
                               borderBottomLeftRadius: roundLeft ? 20 : 0,
                               borderTopRightRadius: roundRight ? 20 : 0,
@@ -603,10 +636,22 @@ export default function CalendarScreen() {
                         const isSelected = ds === selectedDate;
                         const dayEvts = dateEventMap[ds] ?? [];
                         const dayFlights = dateFlightMap[ds] ?? [];
-                        // Any event on this day → show green capsule,
+                        // Any event on this day → show capsule,
                         // unless already covered by a multi-day span bar
                         const hasEvent = dayEvts.length > 0;
-                        const hasFlight = dayFlights.length > 0;
+                        const hasFlight = dayFlights.length > 0 || !!dateTravelMap[ds];
+                        const hasPersonal = !!datePersonalMap[ds];
+
+                        // Priority: grey (past) > pink (personal-only) > green (confirmed) > amber (tentative)
+                        const dayHasConfirmed = dayEvts.some(e => e.status !== 'tentative');
+                        const dayIsPersonalOnly = dayEvts.length > 0 && dayEvts.every(e => e.event_type === 'personal');
+                        const capsuleColors: [string, string] = isPastCell
+                          ? ['#9CA3AF', '#6B7280']
+                          : dayIsPersonalOnly
+                            ? ['#DB2777', '#BE185D']
+                            : dayHasConfirmed
+                              ? ['#22C55E', '#16A34A']
+                              : ['#F59E0B', '#D97706'];
 
                         return (
                           <TouchableOpacity
@@ -630,9 +675,14 @@ export default function CalendarScreen() {
                                 <Ionicons name="airplane" size={8} color="#fff" />
                               </View>
                             )}
+                            {hasPersonal && (
+                              <View style={[styles.personalBadge, isPastCell && { backgroundColor: '#9CA3AF' }]} pointerEvents="none">
+                                <Ionicons name="person" size={7} color="#fff" />
+                              </View>
+                            )}
                             {hasEvent && !isInSpan ? (
                               <LinearGradient
-                                colors={isPastCell ? ['#9CA3AF', '#6B7280'] : ['#22C55E', '#16A34A']}
+                                colors={capsuleColors}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={[styles.calDayCapsule, isSelected && styles.calDayCapsuleSelected]}
@@ -665,6 +715,15 @@ export default function CalendarScreen() {
                   );
                 })}
               </LinearGradient>
+
+              {/* Legend */}
+              <View style={styles.legend}>
+                <LegendItem color="#22C55E" label="Confirmed" />
+                <LegendItem color="#F59E0B" label="Tentative" />
+                <LegendItem color="#DB2777" label="Personal" />
+                <LegendItem color="#9CA3AF" label="Past" />
+                <LegendBadge icon="airplane" color="#2563EB" label="Flight" />
+              </View>
 
               {/* Day timeline */}
               <DayPanel
@@ -701,6 +760,8 @@ export default function CalendarScreen() {
                     const isSelected = ds === selectedDate;
                     const dayEvts = weekEventMap[ds] ?? [];
                     const dayFlights = dateFlightMap[ds] ?? [];
+                    const hasTravelWeek = !!dateTravelMap[ds];
+                    const hasPersonalWeek = !!datePersonalMap[ds];
 
                     const spanForCol = weekSpans.find(s => ci >= s.startCol && ci <= s.endCol);
                     const isInSpan = !!spanForCol;
@@ -709,6 +770,30 @@ export default function CalendarScreen() {
 
                     const startOfTodayW = new Date(); startOfTodayW.setHours(0, 0, 0, 0);
                     const isPastCell = d < startOfTodayW;
+
+                    // Priority: green (confirmed) > amber (pending) > grey (past)
+                    const multiDayOnDay = events.filter(e => {
+                      if (!e.date_end) return false;
+                      const evStart = toDateStr(new Date(e.date_start));
+                      const evEnd = toDateStr(new Date(e.date_end));
+                      return evStart !== evEnd && dayInRange(ds, evStart, evEnd);
+                    });
+                    const weekSpanHasConfirmed = multiDayOnDay.some(e => e.status !== 'tentative');
+                    const weekSpanHasPending = multiDayOnDay.some(e => e.status === 'tentative');
+                    const weekSpanColor = isPastCell ? '#9CA3AF'
+                      : weekSpanHasConfirmed ? '#22C55E'
+                      : weekSpanHasPending ? '#F59E0B'
+                      : '#22C55E';
+
+                    const weekDayHasConfirmed = dayEvts.some(e => e.status !== 'tentative');
+                    const weekDayIsPersonalOnly = dayEvts.length > 0 && dayEvts.every(e => e.event_type === 'personal');
+                    const weekCircleColors: [string, string] = isPastCell
+                      ? ['#9CA3AF', '#6B7280']
+                      : weekDayIsPersonalOnly
+                        ? ['#DB2777', '#BE185D']
+                        : weekDayHasConfirmed
+                          ? ['#22C55E', '#16A34A']
+                          : ['#F59E0B', '#D97706'];
 
                     return (
                       <TouchableOpacity
@@ -730,9 +815,14 @@ export default function CalendarScreen() {
                           {d.toLocaleDateString('en-US', { weekday: 'narrow' })}
                         </Text>
                         <View style={styles.weekCircleWrap}>
-                          {dayFlights.length > 0 && (
+                          {(dayFlights.length > 0 || hasTravelWeek) && (
                             <View style={[styles.flightBadgeWeek, isPastCell && { backgroundColor: '#9CA3AF' }]} pointerEvents="none">
                               <Ionicons name="airplane" size={8} color="#fff" />
+                            </View>
+                          )}
+                          {hasPersonalWeek && (
+                            <View style={[styles.personalBadgeWeek, isPastCell && { backgroundColor: '#9CA3AF' }]} pointerEvents="none">
+                              <Ionicons name="person" size={7} color="#fff" />
                             </View>
                           )}
                           {isInSpan && (
@@ -743,7 +833,7 @@ export default function CalendarScreen() {
                                 left: roundLeft ? 4 : 0,
                                 right: roundRight ? 4 : 0,
                                 top: 0, bottom: 0,
-                                backgroundColor: isPastCell ? '#9CA3AF' : '#22C55E',
+                                backgroundColor: weekSpanColor,
                                 borderTopLeftRadius: roundLeft ? 20 : 0,
                                 borderBottomLeftRadius: roundLeft ? 20 : 0,
                                 borderTopRightRadius: roundRight ? 20 : 0,
@@ -753,7 +843,7 @@ export default function CalendarScreen() {
                           )}
                           {dayEvts.length > 0 ? (
                             <LinearGradient
-                              colors={isPastCell ? ['#9CA3AF', '#6B7280'] : ['#22C55E', '#16A34A']}
+                              colors={weekCircleColors}
                               start={{ x: 0, y: 0 }}
                               end={{ x: 1, y: 1 }}
                               style={styles.weekDayCircleSel}
@@ -911,6 +1001,26 @@ export default function CalendarScreen() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text style={styles.legendLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function LegendBadge({ icon, color, label }: { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendBadge, { backgroundColor: color }]}>
+        <Ionicons name={icon} size={8} color="#fff" />
+      </View>
+      <Text style={styles.legendLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function DayPanel({
   dateStr, events, loading, onNavigate, onEventPress,
 }: {
@@ -986,13 +1096,19 @@ function isPastEvent(event: Event): boolean {
 
 function PremiumEventCard({ event, onPress }: { event: Event; onPress: () => void }) {
   const past = isPastEvent(event);
+  const isPending = event.status === 'tentative';
+  const stripeColor = past ? '#9CA3AF'
+    : isPending ? '#F59E0B'
+    : event.event_type === 'personal' ? '#DB2777'
+    : event.event_type === 'travel' ? '#2563EB'
+    : '#4F46E5';
   return (
     <TouchableOpacity
       style={[styles.premCard, past && styles.premCardPast]}
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <View style={[styles.premStripe, { backgroundColor: past ? '#9CA3AF' : '#4F46E5' }]} />
+      <View style={[styles.premStripe, { backgroundColor: stripeColor }]} />
       <View style={[styles.premIconBox, past && { backgroundColor: 'rgba(107,114,128,0.10)' }]}>
         <Text style={{ fontSize: 17, opacity: past ? 0.55 : 1 }}>{eventTypeIcons[event.event_type] ?? '📅'}</Text>
       </View>
@@ -1599,6 +1715,74 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#fff',
     zIndex: 3,
+  },
+  personalBadge: {
+    position: 'absolute',
+    top: -1,
+    left: 2,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: '#DB2777',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    zIndex: 3,
+  },
+  personalBadgeWeek: {
+    position: 'absolute',
+    top: -4,
+    left: '50%',
+    marginLeft: -22,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: '#DB2777',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    zIndex: 3,
+  },
+
+  // Legend
+  legend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendBadge: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legendLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.80)',
   },
 
   // Stats

@@ -22,13 +22,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   getEventById,
   deleteEvent,
-  getNotes,
-  addNote,
-  getTasks,
-  createTask,
-  toggleTask,
+  confirmEvent,
 } from '../../services/events';
-import { Event, Note, Task, ConnectionStop } from '../../types';
+import { Event, ConnectionStop } from '../../types';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -47,11 +43,7 @@ export default function EventDetailScreen() {
   const isAssistant = user?.role === 'assistant';
 
   const [event, setEvent] = useState<Event | null>(null);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [noteText, setNoteText] = useState('');
-  const [newTaskTitle, setNewTaskTitle] = useState('');
   const [showPoster, setShowPoster] = useState(false);
   const [sharingPoster, setSharingPoster] = useState(false);
   const [sharingCombined, setSharingCombined] = useState(false);
@@ -125,14 +117,8 @@ export default function EventDetailScreen() {
   const loadEvent = useCallback(async () => {
     try {
       setLoading(true);
-      const [ev, n, t] = await Promise.all([
-        getEventById(route.params.eventId),
-        getNotes(route.params.eventId),
-        getTasks(route.params.eventId),
-      ]);
+      const ev = await getEventById(route.params.eventId);
       setEvent(ev);
-      setNotes(n);
-      setTasks(t);
     } catch (e) {
       Alert.alert('Error', 'Could not load event');
       navigation.goBack();
@@ -184,24 +170,18 @@ export default function EventDetailScreen() {
     }
   };
 
-  const handleAddNote = async () => {
-    if (!noteText.trim() || !user) return;
-    await addNote(event?.id, user.id, 'text', noteText.trim());
-    setNoteText('');
-    const updated = await getNotes(route.params.eventId);
-    setNotes(updated);
-  };
-
-  const handleAddTask = async () => {
-    if (!newTaskTitle.trim() || !event) return;
-    await createTask(event.id, newTaskTitle.trim());
-    setNewTaskTitle('');
-    setTasks(await getTasks(event.id));
-  };
-
-  const handleToggleTask = async (task: Task) => {
-    await toggleTask(task.id, !task.completed);
-    setTasks(await getTasks(event!.id));
+  const [confirming, setConfirming] = useState(false);
+  const handleConfirmEvent = async () => {
+    if (!event || confirming) return;
+    setConfirming(true);
+    try {
+      await confirmEvent(event.id);
+      setEvent(prev => prev ? { ...prev, status: 'confirmed' } : prev);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not confirm event');
+    } finally {
+      setConfirming(false);
+    }
   };
 
   // ── Shared helper ────────────────────────────────────────────────────────
@@ -395,8 +375,6 @@ export default function EventDetailScreen() {
     ...(a?.hotel_name                                            ? [{ key: 'stay',       label: 'Stay',      icon: 'bed-outline' as const,                        color: '#E11D48' }] : []),
     ...((event.companions ?? []).length > 0                      ? [{ key: 'companions', label: 'Team',      icon: 'people-outline' as const,                     color: '#0D9488' }] : []),
     ...((event.speaking_topic || event.expected_audience || event.timezone) ? [{ key: 'others', label: 'Others', icon: 'ellipsis-horizontal-circle-outline' as const, color: '#475569' }] : []),
-    { key: 'notes',     label: 'Notes',     icon: 'document-text-outline' as const,              color: '#7C3AED' },
-    ...(isAssistant                                              ? [{ key: 'tasks',      label: 'Tasks',     icon: 'checkmark-circle-outline' as const,           color: '#059669' }] : []),
   ];
   sectionsRef.current = sections;
 
@@ -492,6 +470,34 @@ export default function EventDetailScreen() {
             </View>
           </LinearGradient>
         </TouchableOpacity>
+
+        {/* ── Pending approval banner ── */}
+        {event.status === 'tentative' && (
+          <View style={styles.pendingBanner}>
+            <View style={styles.pendingBannerLeft}>
+              <View style={styles.pendingBannerIcon}>
+                <Ionicons name="time-outline" size={16} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pendingBannerTitle}>Pending Approval</Text>
+                <Text style={styles.pendingBannerSub}>This event hasn't been confirmed yet</Text>
+              </View>
+            </View>
+            {isAssistant && (
+              <TouchableOpacity
+                style={styles.pendingConfirmBtn}
+                onPress={handleConfirmEvent}
+                disabled={confirming}
+                activeOpacity={0.75}
+              >
+                {confirming
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <><Ionicons name="checkmark-circle" size={14} color="#fff" /><Text style={styles.pendingConfirmText}>Confirm</Text></>
+                }
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* ── Quick-facts chips ── */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickFacts}>
@@ -708,64 +714,6 @@ export default function EventDetailScreen() {
             </View>
           )}
 
-          {/* ── Notes ── */}
-          <View onLayout={trackY('notes')}>
-          <Section icon="document-text-outline" bgGradient={['#EEE8FF', '#FAFAFA']} iconGradient={['#7C3AED', '#9333EA']} emoji="📝" title="Notes" delay={380}>
-            {notes.length === 0 && <Text style={styles.emptyText}>No notes yet</Text>}
-            {notes.filter(n => n.type === 'text').map((note) => (
-              <View key={note.id} style={styles.noteItem}>
-                <Text style={styles.noteContent}>{note.content}</Text>
-                <Text style={styles.noteMeta}>{new Date(note.created_at).toLocaleString()}</Text>
-              </View>
-            ))}
-            {isAssistant && (
-            <View style={styles.noteInput}>
-              <Text style={styles.inputLabel}>Add note</Text>
-              <View style={styles.noteRow}>
-                <View style={styles.textInputWrap}>
-                  <NoteTextInput value={noteText} onChange={setNoteText} />
-                </View>
-                <TouchableOpacity style={styles.sendBtn} onPress={handleAddNote} activeOpacity={0.85}>
-                  <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.sendBtnGrad}>
-                    <Ionicons name="send" size={16} color="#fff" />
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </View>
-            )}
-          </Section>
-          </View>
-
-          {/* ── Tasks ── */}
-          {isAssistant && (
-            <View onLayout={trackY('tasks')}>
-            <Section icon="checkmark-circle-outline" bgGradient={['#D1FAE5', '#FAFAFA']} iconGradient={['#059669', '#16A34A']} emoji="✅" title="Tasks" delay={460}>
-              {tasks.map((task) => (
-                <TouchableOpacity key={task.id} style={styles.taskItem} onPress={() => handleToggleTask(task)} activeOpacity={0.75}>
-                  <Ionicons
-                    name={task.completed ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={22}
-                    color={task.completed ? colors.success : colors.inactive}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.taskTitle, task.completed && styles.taskCompleted]}>{task.title}</Text>
-                    {task.due_date && <Text style={styles.taskDue}>{fmtDate(task.due_date)}</Text>}
-                  </View>
-                </TouchableOpacity>
-              ))}
-              <View style={[styles.noteRow, { marginTop: 10 }]}>
-                <View style={styles.textInputWrap}>
-                  <NoteTextInput value={newTaskTitle} onChange={setNewTaskTitle} placeholder="Add new task…" />
-                </View>
-                <TouchableOpacity style={styles.sendBtn} onPress={handleAddTask} activeOpacity={0.85}>
-                  <LinearGradient colors={[colors.success, '#15803D']} style={styles.sendBtnGrad}>
-                    <Ionicons name="add" size={20} color="#fff" />
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </Section>
-            </View>
-          )}
 
           {isAssistant && (
             <TouchableOpacity style={styles.deleteBottomBtn} onPress={handleDelete} activeOpacity={0.8}>
@@ -1010,7 +958,7 @@ function buildLegs(
   fromAirport?: string | null, toAirport?: string | null,
 ): JourneyLeg[] {
   const stops = (connections ?? []).filter(
-    (s) => s.airport || s.airport_name || s.flight_number || s.airline || s.departure_time || s.arrival_time || s.ticket_url
+    (s) => s.airport || s.checkin_airport || s.arrival_airport || s.flight_number || s.airline || s.departure_time || s.checkin_time || s.arrival_time || s.ticket_url
   );
   if (stops.length === 0) {
     return [{ from, to, fromAirport, toAirport, airline, flightNumber, departure, arrival, checkin, ticketUrl }];
@@ -1019,7 +967,7 @@ function buildLegs(
   // Leg 1: boarding → first stop (main flight + main ticket)
   legs.push({
     from, to: stops[0].airport,
-    fromAirport, toAirport: stops[0].airport_name,
+    fromAirport, toAirport: stops[0].checkin_airport,
     airline, flightNumber,
     departure, arrival: stops[0].arrival_time, checkin,
     ticketUrl,
@@ -1028,9 +976,10 @@ function buildLegs(
   for (let k = 1; k < stops.length; k++) {
     legs.push({
       from: stops[k - 1].airport, to: stops[k].airport,
-      fromAirport: stops[k - 1].airport_name, toAirport: stops[k].airport_name,
+      fromAirport: stops[k - 1].arrival_airport, toAirport: stops[k].checkin_airport,
       airline: stops[k - 1].airline, flightNumber: stops[k - 1].flight_number,
       departure: stops[k - 1].departure_time, arrival: stops[k].arrival_time,
+      checkin: stops[k - 1].checkin_time,
       ticketUrl: stops[k - 1].ticket_url,
     });
   }
@@ -1038,9 +987,10 @@ function buildLegs(
   const last = stops[stops.length - 1];
   legs.push({
     from: last.airport, to,
-    fromAirport: last.airport_name, toAirport,
+    fromAirport: last.arrival_airport, toAirport,
     airline: last.airline, flightNumber: last.flight_number,
     departure: last.departure_time, arrival,
+    checkin: last.checkin_time,
     ticketUrl: last.ticket_url,
   });
   return legs;
@@ -1319,21 +1269,6 @@ function InfoRow2({ left, right }: {
   );
 }
 
-function NoteTextInput({ value, onChange, placeholder }: {
-  value: string; onChange: (s: string) => void; placeholder?: string;
-}) {
-  return (
-    <TextInput
-      style={noteInputStyle.input}
-      value={value}
-      onChangeText={onChange}
-      placeholder={placeholder ?? 'Write a note…'}
-      placeholderTextColor={colors.inactive}
-      multiline
-    />
-  );
-}
-
 // ── StyleSheets ──
 
 const styles = StyleSheet.create({
@@ -1368,6 +1303,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18, paddingBottom: 18,
   },
   heroBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
+
+  // Pending banner
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    backgroundColor: '#FFFBEB',
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+  },
+  pendingBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  pendingBannerIcon: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  pendingBannerTitle: { fontSize: 13, fontWeight: '700', color: '#92400E' },
+  pendingBannerSub: { fontSize: 11, color: '#B45309', marginTop: 1 },
+  pendingConfirmBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#D97706',
+    borderRadius: radius.md,
+    paddingHorizontal: 12, paddingVertical: 8,
+    flexShrink: 0,
+  },
+  pendingConfirmText: { fontSize: 13, fontWeight: '800', color: '#fff' },
   heroTitle: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.4, lineHeight: 32 },
   heroPosterShareBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -1450,23 +1418,6 @@ const styles = StyleSheet.create({
 
   emptyText: { color: colors.textTertiary, fontSize: 14, fontStyle: 'italic', paddingVertical: 8, textAlign: 'center' },
 
-  // Notes
-  noteItem: { backgroundColor: '#F8FAFF', borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E0E9FF' },
-  noteContent: { fontSize: 15, color: '#111827', lineHeight: 22 },
-  noteMeta: { fontSize: 11, color: colors.textTertiary, marginTop: 6 },
-  voiceNote: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  playBtn: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
-  voiceLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  voiceDuration: { fontSize: 12, color: colors.textTertiary },
-  noteInput: { marginTop: 12, gap: 10 },
-  inputLabel: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.7 },
-  noteRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
-  textInputWrap: { flex: 1 },
-  sendBtn: { borderRadius: 21, overflow: 'hidden' },
-  sendBtnGrad: { width: 42, height: 42, justifyContent: 'center', alignItems: 'center' },
-  recordBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', borderWidth: 1.5, borderColor: colors.primary + '66', borderRadius: radius.lg, padding: 12, justifyContent: 'center' },
-  recordBtnActive: { backgroundColor: colors.danger, borderColor: colors.danger },
-  recordBtnText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
 
   // Documents
   docItem: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F8FAFF', borderRadius: 18, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E0E9FF' },
@@ -1490,11 +1441,6 @@ const styles = StyleSheet.create({
   sectionTabCounterNum: { fontSize: 15, fontWeight: '900', color: '#1E293B', lineHeight: 18 },
   sectionTabCounterOf: { fontSize: 9, fontWeight: '600', color: '#94A3B8' },
 
-  // Tasks
-  taskItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  taskTitle: { fontSize: 15, color: '#111827', fontWeight: '500' },
-  taskCompleted: { textDecorationLine: 'line-through', color: colors.inactive },
-  taskDue: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
 });
 
 
@@ -1519,11 +1465,3 @@ const inf = StyleSheet.create({
   value: { fontSize: 14, color: '#111827', fontWeight: '700', lineHeight: 20 },
 });
 
-const noteInputStyle = StyleSheet.create({
-  input: {
-    borderWidth: 1, borderColor: colors.border,
-    borderRadius: 14, padding: 12,
-    fontSize: 14, color: colors.textPrimary,
-    backgroundColor: '#FAFAFA', minHeight: 44,
-  },
-});

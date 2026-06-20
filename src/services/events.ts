@@ -94,6 +94,7 @@ export async function createEvent(formData: EventFormData, userId: string): Prom
     .insert({
       title: formData.title,
       event_type: formData.event_type,
+      status: formData.status ?? 'confirmed',
       date_start: formData.date_start,
       date_end: formData.date_end,
       timezone: formData.timezone || 'Asia/Kolkata',
@@ -169,6 +170,7 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
   const eventUpdates: Record<string, unknown> = {};
   if (formData.title !== undefined) eventUpdates.title = formData.title;
   if (formData.event_type !== undefined) eventUpdates.event_type = formData.event_type;
+  if (formData.status !== undefined) eventUpdates.status = formData.status;
   if (formData.date_start !== undefined) eventUpdates.date_start = formData.date_start;
   if (formData.date_end !== undefined) eventUpdates.date_end = formData.date_end;
   if (formData.timezone !== undefined) eventUpdates.timezone = formData.timezone;
@@ -253,6 +255,11 @@ export async function updateEvent(id: string, formData: Partial<EventFormData>):
   }
 
   return getEventById(id);
+}
+
+export async function confirmEvent(id: string): Promise<void> {
+  const { error } = await supabase.from('events').update({ status: 'confirmed' }).eq('id', id);
+  if (error) throw error;
 }
 
 export async function duplicateEvent(event: Event, userId: string): Promise<Event> {

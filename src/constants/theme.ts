@@ -56,6 +56,8 @@ export const eventTypeIcons: Record<string, string> = {
   workshop: '📚',
   wedding: '💍',
   special_event: '✨',
+  travel: '✈️',
+  personal: '👤',
 };
 
 export const radius = {

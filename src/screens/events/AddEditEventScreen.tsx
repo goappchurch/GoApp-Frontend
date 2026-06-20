@@ -70,6 +70,8 @@ const SECTIONS = [
   { key: 'others',     label: 'Others',     icon: 'ellipsis-horizontal-circle-outline' as const, color: colors.textSecondary, bgGradient: ['#E2E8F0', '#FAFAFA'] as [string, string], iconGradient: ['#475569', '#334155'] as [string, string], subtitle: 'Extra details',             emoji: '⚙️' },
 ];
 
+const LOCATION_SECTION = { key: 'location', label: 'Location', icon: 'location-outline' as const, color: '#0891B2', bgGradient: ['#E0F2FE', '#FAFAFA'] as [string, string], iconGradient: ['#0891B2', '#0E7490'] as [string, string], subtitle: 'Where are you meeting?', emoji: '📍' };
+
 export default function AddEditEventScreen() {
   const route = useRoute<RouteProps>();
   const navigation = useNavigation<Nav>();
@@ -143,7 +145,7 @@ export default function AddEditEventScreen() {
   const [activeSection, setActiveSection] = useState(0);
   const [regionModal, setRegionModal] = useState(false);
   const [timezoneModal, setTimezoneModal] = useState(false);
-  const sectionYs = useRef<number[]>(new Array(SECTIONS.length).fill(0));
+  const sectionYs = useRef<Record<string, number>>({});
   const tabScrollRef = useRef<ScrollView>(null);
   const formScrollRef = useRef<ScrollView>(null);
 
@@ -154,6 +156,7 @@ export default function AddEditEventScreen() {
   const [form, setForm] = useState<EventFormData>({
     title: '',
     event_type: 'sunday_service',
+    status: 'confirmed',
     date_start: defaultDateIso,
     timezone: 'Asia/Kolkata',
     flight_booked: false,
@@ -181,6 +184,7 @@ export default function AddEditEventScreen() {
       setForm({
         title: event.title,
         event_type: event.event_type,
+        status: event.status === 'tentative' ? 'tentative' : 'confirmed',
         date_start: event.date_start,
         date_end: event.date_end,
         timezone: event.timezone,
@@ -279,6 +283,19 @@ export default function AddEditEventScreen() {
 
   const set = (key: keyof EventFormData, value: unknown) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const isTravel = form.event_type === 'travel';
+  const isPersonal = form.event_type === 'personal';
+  const isMinistry = !isTravel && !isPersonal;
+
+  const visibleSections = isTravel
+    ? [SECTIONS[0], SECTIONS[3], SECTIONS[4], SECTIONS[5]]
+    : isPersonal
+    ? [SECTIONS[0], LOCATION_SECTION, SECTIONS[5]]
+    : SECTIONS;
+
+  const hasOutConn = (form.connections?.length ?? 0) > 0;
+  const hasRetConn = (form.return_connections?.length ?? 0) > 0;
 
   const addCompanion = () => {
     if ((form.companions?.length ?? 0) >= MAX_COMPANIONS) return;
@@ -503,8 +520,8 @@ export default function AddEditEventScreen() {
   const handleScroll = (e: any) => {
     const y = e.nativeEvent.contentOffset.y + 80;
     let next = 0;
-    for (let i = sectionYs.current.length - 1; i >= 0; i--) {
-      if (y >= sectionYs.current[i]) { next = i; break; }
+    for (let i = visibleSections.length - 1; i >= 0; i--) {
+      if (y >= (sectionYs.current[visibleSections[i].key] ?? 0)) { next = i; break; }
     }
     if (next !== activeSection) {
       setActiveSection(next);
@@ -539,11 +556,11 @@ export default function AddEditEventScreen() {
           contentContainerStyle={styles.stepRow}
           style={{ flex: 1 }}
         >
-          {SECTIONS.map((s, i) => (
+          {visibleSections.map((s, i) => (
             <React.Fragment key={s.key}>
               <TouchableOpacity
                 style={styles.stepItem}
-                onPress={() => formScrollRef.current?.scrollTo({ y: sectionYs.current[i] - 10, animated: true })}
+                onPress={() => formScrollRef.current?.scrollTo({ y: (sectionYs.current[s.key] ?? 0) - 10, animated: true })}
                 activeOpacity={0.7}
               >
                 <View style={[styles.stepCircle, { backgroundColor: i === activeSection ? s.color : '#E8EDF3' }]}>
@@ -553,13 +570,13 @@ export default function AddEditEventScreen() {
                   {s.label}
                 </Text>
               </TouchableOpacity>
-              {i < SECTIONS.length - 1 && <View style={styles.stepDash} />}
+              {i < visibleSections.length - 1 && <View style={styles.stepDash} />}
             </React.Fragment>
           ))}
         </ScrollView>
         <View style={styles.stepCounterBox}>
           <Text style={styles.stepCounterNum}>{activeSection + 1}</Text>
-          <Text style={styles.stepCounterOf}>/{SECTIONS.length}</Text>
+          <Text style={styles.stepCounterOf}>/{visibleSections.length}</Text>
         </View>
       </View>
 
@@ -574,9 +591,41 @@ export default function AddEditEventScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={24}
         >
+        {/* ─── PURPOSE SELECTOR ─── */}
+        <View style={styles.purposeCard}>
+          <Text style={styles.purposeLabel}>What is this for?</Text>
+          <View style={styles.purposeRow}>
+            {([
+              { key: 'ministry', icon: 'megaphone-outline' as const, label: 'Ministry', color: colors.primary },
+              { key: 'travel',   icon: 'airplane-outline'  as const, label: 'Trip',     color: '#7C3AED' },
+              { key: 'personal', icon: 'person-outline'    as const, label: 'Personal', color: '#0891B2' },
+            ]).map((p) => {
+              const active = p.key === 'travel' ? isTravel : p.key === 'personal' ? isPersonal : isMinistry;
+              return (
+                <TouchableOpacity
+                  key={p.key}
+                  style={[styles.purposeChip, active && { backgroundColor: p.color + '15', borderColor: p.color }]}
+                  onPress={() => {
+                    sectionYs.current = {};
+                    setActiveSection(0);
+                    if (p.key === 'travel') set('event_type', 'travel');
+                    else if (p.key === 'personal') set('event_type', 'personal');
+                    else if (!isMinistry) set('event_type', 'sunday_service');
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name={p.icon} size={16} color={active ? p.color : colors.textTertiary} />
+                  <Text style={[styles.purposeChipText, { color: active ? p.color : colors.textTertiary }]}>{p.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* ─── 0: EVENT DETAILS ─── */}
-        <View onLayout={(e) => { sectionYs.current[0] = e.nativeEvent.layout.y; }}>
+        <View onLayout={(e) => { sectionYs.current['details'] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="calendar-outline" bgGradient={SECTIONS[0].bgGradient} iconGradient={SECTIONS[0].iconGradient} title="Event Details" subtitle={SECTIONS[0].subtitle} emoji={SECTIONS[0].emoji} illustration={require('../../assets/illustrations/details.png')}>
+
             <Field icon="pencil-outline" iconColor={colors.primary} label="Event Title" required>
               <TextInput
                 style={fld.input}
@@ -598,11 +647,42 @@ export default function AddEditEventScreen() {
                 </Field>
               }
             />
+
+            {/* Status: Confirmed / Tentative */}
+            <Field icon="checkmark-circle-outline" iconColor="#059669" label="Status">
+              <View style={{ flexDirection: 'row', gap: 10, paddingTop: 4 }}>
+                {([
+                  { key: 'confirmed', label: 'Confirmed', icon: 'checkmark-circle', color: '#059669', bg: '#D1FAE5', border: '#6EE7B7' },
+                  { key: 'tentative', label: 'Tentative', icon: 'time-outline', color: '#D97706', bg: '#FEF3C7', border: '#FCD34D' },
+                ] as const).map((opt) => {
+                  const active = (form.status ?? 'confirmed') === opt.key;
+                  return (
+                    <TouchableOpacity
+                      key={opt.key}
+                      onPress={() => set('status', opt.key)}
+                      activeOpacity={0.75}
+                      style={{
+                        flexDirection: 'row', alignItems: 'center', gap: 6,
+                        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                        backgroundColor: active ? opt.bg : '#F8FAFC',
+                        borderWidth: 1.5,
+                        borderColor: active ? opt.border : '#E2E8F0',
+                      }}
+                    >
+                      <Ionicons name={opt.icon} size={14} color={active ? opt.color : '#94A3B8'} />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: active ? opt.color : '#94A3B8' }}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Field>
           </SectionCard>
         </View>
 
         {/* ─── 1: VENUE ─── */}
-        <View onLayout={(e) => { sectionYs.current[1] = e.nativeEvent.layout.y; }}>
+        {isMinistry && <View onLayout={(e) => { sectionYs.current['venue'] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="location-outline" bgGradient={SECTIONS[1].bgGradient} iconGradient={SECTIONS[1].iconGradient} title="Venue" subtitle={SECTIONS[1].subtitle} emoji={SECTIONS[1].emoji}>
             <Field icon="business-outline" iconColor={colors.success} label="Venue Name">
               <TextInput style={fld.input} value={form.venue_name ?? ''} onChangeText={(v) => set('venue_name', v)} placeholder="Church or hall name" placeholderTextColor="#9CA3AF" />
@@ -678,10 +758,25 @@ export default function AddEditEventScreen() {
               </View>
             </Modal>
           </SectionCard>
-        </View>
+        </View>}
+
+        {/* ─── 1b: LOCATION (personal only) ─── */}
+        {isPersonal && <View onLayout={(e) => { sectionYs.current['location'] = e.nativeEvent.layout.y; }}>
+          <SectionCard icon="location-outline" bgGradient={LOCATION_SECTION.bgGradient} iconGradient={LOCATION_SECTION.iconGradient} title="Location" subtitle={LOCATION_SECTION.subtitle} emoji={LOCATION_SECTION.emoji}>
+            <Field icon="navigate-outline" iconColor="#0891B2" label="Where">
+              <TextInput
+                style={fld.input}
+                value={form.venue_address ?? ''}
+                onChangeText={(v) => set('venue_address', v)}
+                placeholder="e.g. Café, home address, church name..."
+                placeholderTextColor="#9CA3AF"
+              />
+            </Field>
+          </SectionCard>
+        </View>}
 
         {/* ─── 2: ORGANIZER ─── */}
-        <View onLayout={(e) => { sectionYs.current[2] = e.nativeEvent.layout.y; }}>
+        {isMinistry && <View onLayout={(e) => { sectionYs.current['organizer'] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="person-circle-outline" bgGradient={SECTIONS[2].bgGradient} iconGradient={SECTIONS[2].iconGradient} title="Organizer" subtitle={SECTIONS[2].subtitle} emoji={SECTIONS[2].emoji}>
             {contacts.length > 0 && (
               <View style={styles.contactsWrap}>
@@ -714,10 +809,10 @@ export default function AddEditEventScreen() {
               }
             />
           </SectionCard>
-        </View>
+        </View>}
 
         {/* ─── 3: TRAVEL ─── */}
-        <View onLayout={(e) => { sectionYs.current[3] = e.nativeEvent.layout.y; }}>
+        {!isPersonal && <View onLayout={(e) => { sectionYs.current['travel'] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="airplane-outline" bgGradient={SECTIONS[3].bgGradient} iconGradient={SECTIONS[3].iconGradient} title="Travel" subtitle={SECTIONS[3].subtitle} emoji={SECTIONS[3].emoji}>
             {/* Outbound toggle */}
             <ToggleCard
@@ -729,6 +824,32 @@ export default function AddEditEventScreen() {
             />
             {form.flight_booked && (
               <>
+                {/* Connecting Flight toggle */}
+                <ToggleCard
+                  icon="git-network-outline" iconBg="#FEF3C7" iconColor="#D97706"
+                  title="Connecting Flight" sub="Has one or more stops"
+                  value={hasOutConn}
+                  onToggle={(v) => {
+                    if (v) {
+                      set('connections', [{}]);
+                    } else {
+                      const hasData = (form.connections ?? []).some(
+                        s => s.airport || s.flight_number || s.airline || s.departure_time || s.arrival_time || s.ticket_url
+                      );
+                      if (hasData) {
+                        Alert.alert('Remove connections?', 'All connecting leg data will be cleared.', [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Remove', style: 'destructive', onPress: () => set('connections', []) },
+                        ]);
+                      } else {
+                        set('connections', []);
+                      }
+                    }
+                  }}
+                  trackOn="#D97706"
+                />
+
+                {/* Boarding / Deboarding — always shown (whole trip) */}
                 <TwoFields
                   left={
                     <Field icon="location-outline" iconColor="#7C3AED" label="Boarding Point">
@@ -741,84 +862,160 @@ export default function AddEditEventScreen() {
                     </Field>
                   }
                 />
-                <TwoFields
-                  left={
-                    <Field icon="business-outline" iconColor="#7C3AED" label="Check-in Airport">
-                      <TextInput style={fld.input} value={form.checkin_airport ?? ''} onChangeText={(v) => set('checkin_airport', v)} placeholder="e.g. Cochin Intl (COK)" placeholderTextColor="#9CA3AF" />
+
+                {/* Single flight mode */}
+                {!hasOutConn && (
+                  <>
+                    <TwoFields
+                      left={
+                        <Field icon="business-outline" iconColor="#7C3AED" label="Check-in Airport">
+                          <TextInput style={fld.input} value={form.checkin_airport ?? ''} onChangeText={(v) => set('checkin_airport', v)} placeholder="e.g. Cochin Intl (COK)" placeholderTextColor="#9CA3AF" />
+                        </Field>
+                      }
+                      right={
+                        <Field icon="business-outline" iconColor="#7C3AED" label="Arrival Airport">
+                          <TextInput style={fld.input} value={form.arrival_airport ?? ''} onChangeText={(v) => set('arrival_airport', v)} placeholder="e.g. Dubai Intl (DXB)" placeholderTextColor="#9CA3AF" />
+                        </Field>
+                      }
+                    />
+                    <TwoFields
+                      left={
+                        <Field icon="barcode-outline" iconColor="#7C3AED" label="Flight No.">
+                          <TextInput style={fld.input} value={form.flight_number ?? ''} onChangeText={(v) => set('flight_number', v)} placeholder="EK 123" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
+                        </Field>
+                      }
+                      right={
+                        <Field icon="airplane-outline" iconColor="#7C3AED" label="Airline">
+                          <TextInput style={fld.input} value={form.airline ?? ''} onChangeText={(v) => set('airline', v)} placeholder="Emirates" placeholderTextColor="#9CA3AF" />
+                        </Field>
+                      }
+                    />
+                    <TwoFields
+                      left={
+                        <Field icon="send-outline" iconColor="#7C3AED" label="Departure" noBox>
+                          <DateField label="" value={form.departure_time} onChange={(iso) => set('departure_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
+                        </Field>
+                      }
+                      right={
+                        <Field icon="alarm-outline" iconColor="#7C3AED" label="Check-in Time" noBox>
+                          <DateField label="" value={form.flight_checkin_time} onChange={(iso) => set('flight_checkin_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
+                        </Field>
+                      }
+                    />
+                    <Field icon="flag-outline" iconColor="#7C3AED" label="Arrival Time" noBox>
+                      <DateField label="" value={form.arrival_time} onChange={(iso) => set('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
                     </Field>
-                  }
-                  right={
-                    <Field icon="business-outline" iconColor="#7C3AED" label="Arrival Airport">
-                      <TextInput style={fld.input} value={form.arrival_airport ?? ''} onChangeText={(v) => set('arrival_airport', v)} placeholder="e.g. Dubai Intl (DXB)" placeholderTextColor="#9CA3AF" />
-                    </Field>
-                  }
-                />
-                <TwoFields
-                  left={
-                    <Field icon="barcode-outline" iconColor="#7C3AED" label="Flight No.">
-                      <TextInput style={fld.input} value={form.flight_number ?? ''} onChangeText={(v) => set('flight_number', v)} placeholder="EK 123" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
-                    </Field>
-                  }
-                  right={
-                    <Field icon="airplane-outline" iconColor="#7C3AED" label="Airline">
-                      <TextInput style={fld.input} value={form.airline ?? ''} onChangeText={(v) => set('airline', v)} placeholder="Emirates" placeholderTextColor="#9CA3AF" />
-                    </Field>
-                  }
-                />
-                <TwoFields
-                  left={
-                    <Field icon="send-outline" iconColor="#7C3AED" label="Departure" noBox>
-                      <DateField label="" value={form.departure_time} onChange={(iso) => set('departure_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
-                    </Field>
-                  }
-                  right={
-                    <Field icon="alarm-outline" iconColor="#7C3AED" label="Check-in Time" noBox>
-                      <DateField label="" value={form.flight_checkin_time} onChange={(iso) => set('flight_checkin_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
-                    </Field>
-                  }
-                />
-                <Field icon="flag-outline" iconColor="#7C3AED" label="Arrival Time" noBox>
-                  <DateField label="" value={form.arrival_time} onChange={(iso) => set('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
-                </Field>
-                {(form.connections ?? []).map((stop, idx) => (
-                  <ConnectionCard
-                    key={idx}
-                    index={idx}
-                    stop={stop}
-                    onChange={(updated) => {
-                      const next = [...(form.connections ?? [])];
-                      next[idx] = updated;
-                      set('connections', next);
-                    }}
-                    onRemove={() => set('connections', (form.connections ?? []).filter((_, i) => i !== idx))}
-                    accent="#7C3AED"
-                    ticketPending={!!connTicketUris.current[`out-${idx}`]}
-                    ticketUploading={!!connUploading[`out-${idx}`]}
-                    onPickTicket={() => handlePickConnectionTicket('connections', idx)}
-                  />
-                ))}
-                <TouchableOpacity
-                  style={styles.addConnectionBtn}
-                  onPress={() => set('connections', [...(form.connections ?? []), {}])}
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.addConnectionIcon}>
-                    <Ionicons name="git-branch-outline" size={14} color="#D97706" />
-                  </View>
-                  <Text style={styles.addConnectionText}>
-                    {(form.connections ?? []).length === 0 ? 'Add Connecting Flight' : 'Add Another Stop'}
-                  </Text>
-                  <Ionicons name="add" size={16} color="#D97706" />
-                </TouchableOpacity>
-                <PdfButton
-                  label="Outbound Ticket PDF"
-                  color="#7C3AED"
-                  bg="#F5F3FF"
-                  uploaded={!!form.ticket_pdf_url}
-                  selected={!!ticketUri}
-                  uploading={uploadingPdf}
-                  onPress={handlePickTicket}
-                />
+                    <PdfButton
+                      label="Outbound Ticket PDF"
+                      color="#7C3AED"
+                      bg="#F5F3FF"
+                      uploaded={!!form.ticket_pdf_url}
+                      selected={!!ticketUri}
+                      uploading={uploadingPdf}
+                      onPress={handlePickTicket}
+                    />
+                  </>
+                )}
+
+                {/* Leg mode */}
+                {hasOutConn && (
+                  <>
+                    {/* Leg 1 card */}
+                    <View style={[conn.card, { borderColor: '#7C3AED33' }]}>
+                      <View style={[conn.header, { backgroundColor: '#7C3AED14' }]}>
+                        <View style={conn.headerLeft}>
+                          <View style={[conn.iconWrap, { backgroundColor: '#7C3AED22' }]}>
+                            <Ionicons name="airplane" size={13} color="#7C3AED" />
+                          </View>
+                          <Text style={[conn.headerText, { color: '#7C3AED' }]}>Leg 1</Text>
+                        </View>
+                      </View>
+                      <View style={conn.body}>
+                        <TwoFields
+                          left={
+                            <Field icon="business-outline" iconColor="#7C3AED" label="Check-in Airport">
+                              <TextInput style={fld.input} value={form.checkin_airport ?? ''} onChangeText={(v) => set('checkin_airport', v)} placeholder="COK" placeholderTextColor="#9CA3AF" />
+                            </Field>
+                          }
+                          right={
+                            <Field icon="business-outline" iconColor="#7C3AED" label="Arrival Airport">
+                              <TextInput style={fld.input} value={form.arrival_airport ?? ''} onChangeText={(v) => set('arrival_airport', v)} placeholder="DXB" placeholderTextColor="#9CA3AF" />
+                            </Field>
+                          }
+                        />
+                        <TwoFields
+                          left={
+                            <Field icon="barcode-outline" iconColor="#7C3AED" label="Flight No.">
+                              <TextInput style={fld.input} value={form.flight_number ?? ''} onChangeText={(v) => set('flight_number', v)} placeholder="EK 123" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
+                            </Field>
+                          }
+                          right={
+                            <Field icon="airplane-outline" iconColor="#7C3AED" label="Airline">
+                              <TextInput style={fld.input} value={form.airline ?? ''} onChangeText={(v) => set('airline', v)} placeholder="Emirates" placeholderTextColor="#9CA3AF" />
+                            </Field>
+                          }
+                        />
+                        <TwoFields
+                          left={
+                            <Field icon="send-outline" iconColor="#7C3AED" label="Departure" noBox>
+                              <DateField label="" value={form.departure_time} onChange={(iso) => set('departure_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
+                            </Field>
+                          }
+                          right={
+                            <Field icon="alarm-outline" iconColor="#7C3AED" label="Check-in Time" noBox>
+                              <DateField label="" value={form.flight_checkin_time} onChange={(iso) => set('flight_checkin_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
+                            </Field>
+                          }
+                        />
+                        <Field icon="flag-outline" iconColor="#7C3AED" label="Arrival Time" noBox>
+                          <DateField label="" value={form.arrival_time} onChange={(iso) => set('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor="#7C3AED" />
+                        </Field>
+                        <PdfButton
+                          label="Leg 1 Ticket PDF"
+                          color="#7C3AED"
+                          bg="#F5F3FF"
+                          uploaded={!!form.ticket_pdf_url}
+                          selected={!!ticketUri}
+                          uploading={uploadingPdf}
+                          onPress={handlePickTicket}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Leg 2, 3... */}
+                    {(form.connections ?? []).map((stop, idx) => (
+                      <ConnectionCard
+                        key={idx}
+                        index={idx}
+                        legNum={idx + 2}
+                        stop={stop}
+                        onChange={(updated) => {
+                          const next = [...(form.connections ?? [])];
+                          next[idx] = updated;
+                          set('connections', next);
+                        }}
+                        onRemove={() => set('connections', (form.connections ?? []).filter((_, i) => i !== idx))}
+                        accent="#7C3AED"
+                        ticketPending={!!connTicketUris.current[`out-${idx}`]}
+                        ticketUploading={!!connUploading[`out-${idx}`]}
+                        onPickTicket={() => handlePickConnectionTicket('connections', idx)}
+                      />
+                    ))}
+
+                    {/* Add Another Leg */}
+                    <TouchableOpacity
+                      style={styles.addConnectionBtn}
+                      onPress={() => set('connections', [...(form.connections ?? []), {}])}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.addConnectionIcon}>
+                        <Ionicons name="airplane-outline" size={14} color="#D97706" />
+                      </View>
+                      <Text style={styles.addConnectionText}>Add Another Leg</Text>
+                      <Ionicons name="add" size={16} color="#D97706" />
+                    </TouchableOpacity>
+                  </>
+                )}
               </>
             )}
 
@@ -834,6 +1031,32 @@ export default function AddEditEventScreen() {
             />
             {form.return_flight_booked && (
               <>
+                {/* Return Connecting Flight toggle */}
+                <ToggleCard
+                  icon="git-network-outline" iconBg="#FEF3C7" iconColor="#D97706"
+                  title="Connecting Flight" sub="Has one or more stops"
+                  value={hasRetConn}
+                  onToggle={(v) => {
+                    if (v) {
+                      set('return_connections', [{}]);
+                    } else {
+                      const hasData = (form.return_connections ?? []).some(
+                        s => s.airport || s.flight_number || s.airline || s.departure_time || s.arrival_time || s.ticket_url
+                      );
+                      if (hasData) {
+                        Alert.alert('Remove connections?', 'All return connecting leg data will be cleared.', [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Remove', style: 'destructive', onPress: () => set('return_connections', []) },
+                        ]);
+                      } else {
+                        set('return_connections', []);
+                      }
+                    }
+                  }}
+                  trackOn="#D97706"
+                />
+
+                {/* Return Boarding / Deboarding — always shown (whole return trip) */}
                 <TwoFields
                   left={
                     <Field icon="location-outline" iconColor={colors.success} label="Boarding Point">
@@ -846,91 +1069,167 @@ export default function AddEditEventScreen() {
                     </Field>
                   }
                 />
-                <TwoFields
-                  left={
-                    <Field icon="business-outline" iconColor={colors.success} label="Check-in Airport">
-                      <TextInput style={fld.input} value={form.return_checkin_airport ?? ''} onChangeText={(v) => set('return_checkin_airport', v)} placeholder="e.g. Dubai Intl (DXB)" placeholderTextColor="#9CA3AF" />
+
+                {/* Single return flight mode */}
+                {!hasRetConn && (
+                  <>
+                    <TwoFields
+                      left={
+                        <Field icon="business-outline" iconColor={colors.success} label="Check-in Airport">
+                          <TextInput style={fld.input} value={form.return_checkin_airport ?? ''} onChangeText={(v) => set('return_checkin_airport', v)} placeholder="e.g. Dubai Intl (DXB)" placeholderTextColor="#9CA3AF" />
+                        </Field>
+                      }
+                      right={
+                        <Field icon="business-outline" iconColor={colors.success} label="Arrival Airport">
+                          <TextInput style={fld.input} value={form.return_arrival_airport ?? ''} onChangeText={(v) => set('return_arrival_airport', v)} placeholder="e.g. Cochin Intl (COK)" placeholderTextColor="#9CA3AF" />
+                        </Field>
+                      }
+                    />
+                    <TwoFields
+                      left={
+                        <Field icon="barcode-outline" iconColor={colors.success} label="Flight No.">
+                          <TextInput style={fld.input} value={form.return_flight_number ?? ''} onChangeText={(v) => set('return_flight_number', v)} placeholder="EK 124" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
+                        </Field>
+                      }
+                      right={
+                        <Field icon="airplane-outline" iconColor={colors.success} label="Airline">
+                          <TextInput style={fld.input} value={form.return_airline ?? ''} onChangeText={(v) => set('return_airline', v)} placeholder="Emirates" placeholderTextColor="#9CA3AF" />
+                        </Field>
+                      }
+                    />
+                    <TwoFields
+                      left={
+                        <Field icon="send-outline" iconColor={colors.success} label="Departure" noBox>
+                          <DateField label="" value={form.return_departure_time} onChange={(iso) => set('return_departure_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
+                        </Field>
+                      }
+                      right={
+                        <Field icon="alarm-outline" iconColor={colors.success} label="Check-in Time" noBox>
+                          <DateField label="" value={form.return_flight_checkin_time} onChange={(iso) => set('return_flight_checkin_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
+                        </Field>
+                      }
+                    />
+                    <Field icon="flag-outline" iconColor={colors.success} label="Arrival Time" noBox>
+                      <DateField label="" value={form.return_arrival_time} onChange={(iso) => set('return_arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
                     </Field>
-                  }
-                  right={
-                    <Field icon="business-outline" iconColor={colors.success} label="Arrival Airport">
-                      <TextInput style={fld.input} value={form.return_arrival_airport ?? ''} onChangeText={(v) => set('return_arrival_airport', v)} placeholder="e.g. Cochin Intl (COK)" placeholderTextColor="#9CA3AF" />
-                    </Field>
-                  }
-                />
-                <TwoFields
-                  left={
-                    <Field icon="barcode-outline" iconColor={colors.success} label="Flight No.">
-                      <TextInput style={fld.input} value={form.return_flight_number ?? ''} onChangeText={(v) => set('return_flight_number', v)} placeholder="EK 124" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
-                    </Field>
-                  }
-                  right={
-                    <Field icon="airplane-outline" iconColor={colors.success} label="Airline">
-                      <TextInput style={fld.input} value={form.return_airline ?? ''} onChangeText={(v) => set('return_airline', v)} placeholder="Emirates" placeholderTextColor="#9CA3AF" />
-                    </Field>
-                  }
-                />
-                <TwoFields
-                  left={
-                    <Field icon="send-outline" iconColor={colors.success} label="Departure" noBox>
-                      <DateField label="" value={form.return_departure_time} onChange={(iso) => set('return_departure_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
-                    </Field>
-                  }
-                  right={
-                    <Field icon="alarm-outline" iconColor={colors.success} label="Check-in Time" noBox>
-                      <DateField label="" value={form.return_flight_checkin_time} onChange={(iso) => set('return_flight_checkin_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
-                    </Field>
-                  }
-                />
-                <Field icon="flag-outline" iconColor={colors.success} label="Arrival Time" noBox>
-                  <DateField label="" value={form.return_arrival_time} onChange={(iso) => set('return_arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
-                </Field>
-                {(form.return_connections ?? []).map((stop, idx) => (
-                  <ConnectionCard
-                    key={idx}
-                    index={idx}
-                    stop={stop}
-                    onChange={(updated) => {
-                      const next = [...(form.return_connections ?? [])];
-                      next[idx] = updated;
-                      set('return_connections', next);
-                    }}
-                    onRemove={() => set('return_connections', (form.return_connections ?? []).filter((_, i) => i !== idx))}
-                    accent={colors.success}
-                    ticketPending={!!connTicketUris.current[`ret-${idx}`]}
-                    ticketUploading={!!connUploading[`ret-${idx}`]}
-                    onPickTicket={() => handlePickConnectionTicket('return_connections', idx)}
-                  />
-                ))}
-                <TouchableOpacity
-                  style={styles.addConnectionBtn}
-                  onPress={() => set('return_connections', [...(form.return_connections ?? []), {}])}
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.addConnectionIcon}>
-                    <Ionicons name="git-branch-outline" size={14} color="#D97706" />
-                  </View>
-                  <Text style={styles.addConnectionText}>
-                    {(form.return_connections ?? []).length === 0 ? 'Add Connecting Flight' : 'Add Another Stop'}
-                  </Text>
-                  <Ionicons name="add" size={16} color="#D97706" />
-                </TouchableOpacity>
-                <PdfButton
-                  label="Return Ticket PDF"
-                  color={colors.success}
-                  bg="#F0FDF4"
-                  uploaded={!!form.return_ticket_pdf_url}
-                  selected={!!returnTicketUri}
-                  uploading={uploadingReturnPdf}
-                  onPress={handlePickReturnTicket}
-                />
+                    <PdfButton
+                      label="Return Ticket PDF"
+                      color={colors.success}
+                      bg="#F0FDF4"
+                      uploaded={!!form.return_ticket_pdf_url}
+                      selected={!!returnTicketUri}
+                      uploading={uploadingReturnPdf}
+                      onPress={handlePickReturnTicket}
+                    />
+                  </>
+                )}
+
+                {/* Return leg mode */}
+                {hasRetConn && (
+                  <>
+                    {/* Leg 1 card */}
+                    <View style={[conn.card, { borderColor: colors.success + '33' }]}>
+                      <View style={[conn.header, { backgroundColor: colors.success + '14' }]}>
+                        <View style={conn.headerLeft}>
+                          <View style={[conn.iconWrap, { backgroundColor: colors.success + '22' }]}>
+                            <Ionicons name="airplane" size={13} color={colors.success} />
+                          </View>
+                          <Text style={[conn.headerText, { color: colors.success }]}>Leg 1</Text>
+                        </View>
+                      </View>
+                      <View style={conn.body}>
+                        <TwoFields
+                          left={
+                            <Field icon="business-outline" iconColor={colors.success} label="Check-in Airport">
+                              <TextInput style={fld.input} value={form.return_checkin_airport ?? ''} onChangeText={(v) => set('return_checkin_airport', v)} placeholder="DXB" placeholderTextColor="#9CA3AF" />
+                            </Field>
+                          }
+                          right={
+                            <Field icon="business-outline" iconColor={colors.success} label="Arrival Airport">
+                              <TextInput style={fld.input} value={form.return_arrival_airport ?? ''} onChangeText={(v) => set('return_arrival_airport', v)} placeholder="COK" placeholderTextColor="#9CA3AF" />
+                            </Field>
+                          }
+                        />
+                        <TwoFields
+                          left={
+                            <Field icon="barcode-outline" iconColor={colors.success} label="Flight No.">
+                              <TextInput style={fld.input} value={form.return_flight_number ?? ''} onChangeText={(v) => set('return_flight_number', v)} placeholder="EK 124" placeholderTextColor="#9CA3AF" autoCapitalize="characters" />
+                            </Field>
+                          }
+                          right={
+                            <Field icon="airplane-outline" iconColor={colors.success} label="Airline">
+                              <TextInput style={fld.input} value={form.return_airline ?? ''} onChangeText={(v) => set('return_airline', v)} placeholder="Emirates" placeholderTextColor="#9CA3AF" />
+                            </Field>
+                          }
+                        />
+                        <TwoFields
+                          left={
+                            <Field icon="send-outline" iconColor={colors.success} label="Departure" noBox>
+                              <DateField label="" value={form.return_departure_time} onChange={(iso) => set('return_departure_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
+                            </Field>
+                          }
+                          right={
+                            <Field icon="alarm-outline" iconColor={colors.success} label="Check-in Time" noBox>
+                              <DateField label="" value={form.return_flight_checkin_time} onChange={(iso) => set('return_flight_checkin_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
+                            </Field>
+                          }
+                        />
+                        <Field icon="flag-outline" iconColor={colors.success} label="Arrival Time" noBox>
+                          <DateField label="" value={form.return_arrival_time} onChange={(iso) => set('return_arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor={colors.success} />
+                        </Field>
+                        <PdfButton
+                          label="Leg 1 Ticket PDF"
+                          color={colors.success}
+                          bg="#F0FDF4"
+                          uploaded={!!form.return_ticket_pdf_url}
+                          selected={!!returnTicketUri}
+                          uploading={uploadingReturnPdf}
+                          onPress={handlePickReturnTicket}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Leg 2, 3... */}
+                    {(form.return_connections ?? []).map((stop, idx) => (
+                      <ConnectionCard
+                        key={idx}
+                        index={idx}
+                        legNum={idx + 2}
+                        stop={stop}
+                        onChange={(updated) => {
+                          const next = [...(form.return_connections ?? [])];
+                          next[idx] = updated;
+                          set('return_connections', next);
+                        }}
+                        onRemove={() => set('return_connections', (form.return_connections ?? []).filter((_, i) => i !== idx))}
+                        accent={colors.success}
+                        ticketPending={!!connTicketUris.current[`ret-${idx}`]}
+                        ticketUploading={!!connUploading[`ret-${idx}`]}
+                        onPickTicket={() => handlePickConnectionTicket('return_connections', idx)}
+                      />
+                    ))}
+
+                    {/* Add Another Leg */}
+                    <TouchableOpacity
+                      style={styles.addConnectionBtn}
+                      onPress={() => set('return_connections', [...(form.return_connections ?? []), {}])}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.addConnectionIcon}>
+                        <Ionicons name="airplane-outline" size={14} color="#D97706" />
+                      </View>
+                      <Text style={styles.addConnectionText}>Add Another Leg</Text>
+                      <Ionicons name="add" size={16} color="#D97706" />
+                    </TouchableOpacity>
+                  </>
+                )}
               </>
             )}
           </SectionCard>
-        </View>
+        </View>}
 
         {/* ─── 4: ACCOMMODATION ─── */}
-        <View onLayout={(e) => { sectionYs.current[4] = e.nativeEvent.layout.y; }}>
+        {!isPersonal && <View onLayout={(e) => { sectionYs.current['stay'] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="bed-outline" bgGradient={SECTIONS[4].bgGradient} iconGradient={SECTIONS[4].iconGradient} title="Accommodation" subtitle={SECTIONS[4].subtitle} emoji={SECTIONS[4].emoji}>
             <Field icon="business-outline" iconColor="#E11D48" label="Hotel Name">
               <TextInput style={fld.input} value={form.hotel_name ?? ''} onChangeText={(v) => set('hotel_name', v)} placeholder="Hotel name" placeholderTextColor="#9CA3AF" />
@@ -951,10 +1250,10 @@ export default function AddEditEventScreen() {
               }
             />
           </SectionCard>
-        </View>
+        </View>}
 
         {/* ─── 5: COMPANIONS ─── */}
-        <View onLayout={(e) => { sectionYs.current[5] = e.nativeEvent.layout.y; }}>
+        <View onLayout={(e) => { sectionYs.current['companions'] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="people-outline" bgGradient={SECTIONS[5].bgGradient} iconGradient={SECTIONS[5].iconGradient} title="Travel Companions" subtitle={SECTIONS[5].subtitle} emoji={SECTIONS[5].emoji}>
             {(form.companions ?? []).length === 0 ? (
               <View style={styles.companionsEmpty}>
@@ -999,7 +1298,7 @@ export default function AddEditEventScreen() {
         </View>
 
         {/* ─── 6: POSTER ─── */}
-        <View onLayout={(e) => { sectionYs.current[6] = e.nativeEvent.layout.y; }}>
+        {isMinistry && <View onLayout={(e) => { sectionYs.current['poster'] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="image-outline" bgGradient={SECTIONS[6].bgGradient} iconGradient={SECTIONS[6].iconGradient} title="Event Poster" subtitle={SECTIONS[6].subtitle} emoji={SECTIONS[6].emoji}>
             <TouchableOpacity style={styles.posterBtn} onPress={handlePickPoster} activeOpacity={0.85}>
               {uploadingPoster ? (
@@ -1023,10 +1322,10 @@ export default function AddEditEventScreen() {
               )}
             </TouchableOpacity>
           </SectionCard>
-        </View>
+        </View>}
 
         {/* ─── 7: OTHERS ─── */}
-        <View onLayout={(e) => { sectionYs.current[7] = e.nativeEvent.layout.y; }}>
+        {isMinistry && <View onLayout={(e) => { sectionYs.current['others'] = e.nativeEvent.layout.y; }}>
           <SectionCard icon="ellipsis-horizontal-circle-outline" bgGradient={SECTIONS[7].bgGradient} iconGradient={SECTIONS[7].iconGradient} title="Others" subtitle={SECTIONS[7].subtitle} emoji={SECTIONS[7].emoji}>
             <Field icon="mic-outline" iconColor={colors.textSecondary} label="Speaking Topic">
               <TextInput style={fld.input} value={form.speaking_topic ?? ''} onChangeText={(v) => set('speaking_topic', v)} placeholder="Topic or sermon title" placeholderTextColor="#9CA3AF" />
@@ -1053,10 +1352,10 @@ export default function AddEditEventScreen() {
               }
             />
           </SectionCard>
-        </View>
+        </View>}
 
         {/* Timezone picker modal */}
-        <Modal transparent animationType="slide" visible={timezoneModal} onRequestClose={() => setTimezoneModal(false)} statusBarTranslucent>
+        {isMinistry && <Modal transparent animationType="slide" visible={timezoneModal} onRequestClose={() => setTimezoneModal(false)} statusBarTranslucent>
           <View style={fld.regionBackdrop}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setTimezoneModal(false)} />
             <View style={[fld.regionSheet, { maxHeight: '80%' }]}>
@@ -1098,7 +1397,7 @@ export default function AddEditEventScreen() {
               </ScrollView>
             </View>
           </View>
-        </Modal>
+        </Modal>}
 
         {/* ── SAVE ── */}
         <TouchableOpacity
@@ -1295,10 +1594,11 @@ function PdfButton({ label, color, bg, uploaded, selected, uploading, onPress }:
 }
 
 function ConnectionCard({
-  index, stop, onChange, onRemove,
+  index, legNum, stop, onChange, onRemove,
   accent = '#D97706', ticketPending = false, ticketUploading = false, onPickTicket,
 }: {
   index: number;
+  legNum?: number;
   stop: ConnectionStop;
   onChange: (updated: ConnectionStop) => void;
   onRemove: () => void;
@@ -1309,16 +1609,20 @@ function ConnectionCard({
 }) {
   const upd = (key: keyof ConnectionStop, val: string | undefined) =>
     onChange({ ...stop, [key]: val });
+  const headerLabel = legNum != null ? `Leg ${legNum}` : `Connection ${index + 1}`;
 
   return (
     <View style={[conn.card, { borderColor: accent + '33' }]}>
       <View style={[conn.header, { backgroundColor: accent + '14' }]}>
         <View style={conn.headerLeft}>
           <View style={[conn.iconWrap, { backgroundColor: accent + '22' }]}>
-            <Ionicons name="git-branch-outline" size={13} color={accent} />
+            <Ionicons name="airplane" size={13} color={accent} />
           </View>
-          <Text style={[conn.headerText, { color: accent }]}>Connection {index + 1}</Text>
+          <Text style={[conn.headerText, { color: accent }]}>{headerLabel}</Text>
         </View>
+        {!!stop.airport && (
+          <Text style={[conn.stopLabel, { color: accent + 'AA' }]} numberOfLines={1}>{stop.airport}</Text>
+        )}
         <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <View style={conn.removeBtn}>
             <Ionicons name="close" size={12} color={colors.danger} />
@@ -1326,25 +1630,34 @@ function ConnectionCard({
         </TouchableOpacity>
       </View>
       <View style={conn.body}>
+        <Field icon="location-outline" iconColor={accent} label="Stopover Place">
+          <TextInput
+            style={fld.input}
+            value={stop.airport ?? ''}
+            onChangeText={(v) => upd('airport', v)}
+            placeholder="e.g. Dubai"
+            placeholderTextColor="#9CA3AF"
+          />
+        </Field>
         <TwoFields
           left={
-            <Field icon="location-outline" iconColor={accent} label="Stopover Place">
+            <Field icon="business-outline" iconColor={accent} label="Check-in Airport">
               <TextInput
                 style={fld.input}
-                value={stop.airport ?? ''}
-                onChangeText={(v) => upd('airport', v)}
-                placeholder="e.g. Dubai"
+                value={stop.checkin_airport ?? ''}
+                onChangeText={(v) => upd('checkin_airport', v)}
+                placeholder="DXB"
                 placeholderTextColor="#9CA3AF"
               />
             </Field>
           }
           right={
-            <Field icon="business-outline" iconColor={accent} label="Airport Name">
+            <Field icon="business-outline" iconColor={accent} label="Arrival Airport">
               <TextInput
                 style={fld.input}
-                value={stop.airport_name ?? ''}
-                onChangeText={(v) => upd('airport_name', v)}
-                placeholder="e.g. Dubai Intl (DXB)"
+                value={stop.arrival_airport ?? ''}
+                onChangeText={(v) => upd('arrival_airport', v)}
+                placeholder="LHR"
                 placeholderTextColor="#9CA3AF"
               />
             </Field>
@@ -1352,17 +1665,6 @@ function ConnectionCard({
         />
         <TwoFields
           left={
-            <Field icon="airplane-outline" iconColor={accent} label="Airline">
-              <TextInput
-                style={fld.input}
-                value={stop.airline ?? ''}
-                onChangeText={(v) => upd('airline', v)}
-                placeholder="Emirates"
-                placeholderTextColor="#9CA3AF"
-              />
-            </Field>
-          }
-          right={
             <Field icon="barcode-outline" iconColor={accent} label="Flight No.">
               <TextInput
                 style={fld.input}
@@ -1374,22 +1676,36 @@ function ConnectionCard({
               />
             </Field>
           }
+          right={
+            <Field icon="airplane-outline" iconColor={accent} label="Airline">
+              <TextInput
+                style={fld.input}
+                value={stop.airline ?? ''}
+                onChangeText={(v) => upd('airline', v)}
+                placeholder="Emirates"
+                placeholderTextColor="#9CA3AF"
+              />
+            </Field>
+          }
         />
         <TwoFields
           left={
-            <Field icon="flag-outline" iconColor={accent} label="Arrives Stop" noBox>
-              <DateField label="" value={stop.arrival_time} onChange={(iso) => upd('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor={accent} />
-            </Field>
-          }
-          right={
-            <Field icon="send-outline" iconColor={accent} label="Departs Stop" noBox>
+            <Field icon="send-outline" iconColor={accent} label="Departure" noBox>
               <DateField label="" value={stop.departure_time} onChange={(iso) => upd('departure_time', iso)} mode="datetime" placeholder="Not set" accentColor={accent} />
             </Field>
           }
+          right={
+            <Field icon="alarm-outline" iconColor={accent} label="Check-in Time" noBox>
+              <DateField label="" value={stop.checkin_time} onChange={(iso) => upd('checkin_time', iso)} mode="datetime" placeholder="Not set" accentColor={accent} />
+            </Field>
+          }
         />
+        <Field icon="flag-outline" iconColor={accent} label="Arrival Time" noBox>
+          <DateField label="" value={stop.arrival_time} onChange={(iso) => upd('arrival_time', iso)} mode="datetime" placeholder="Not set" accentColor={accent} />
+        </Field>
         {onPickTicket && (
           <PdfButton
-            label="Connection Ticket PDF"
+            label={legNum != null ? `Leg ${legNum} Ticket PDF` : 'Connection Ticket PDF'}
             color={accent}
             bg={accent + '14'}
             uploaded={!!stop.ticket_url}
@@ -1522,6 +1838,39 @@ const styles = StyleSheet.create({
   },
   savingText: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
   savingSubText: { fontSize: 13, color: colors.textSecondary },
+
+  // Purpose selector
+  purposeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+    shadowColor: '#1A56DB',
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  purposeLabel: { fontSize: 11, fontWeight: '800', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.8 },
+  purposeRow: { flexDirection: 'row', gap: 10 },
+  purposeChip: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 11, borderRadius: 14,
+    backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#E2E8F0',
+  },
+  purposeChipText: { fontSize: 13, fontWeight: '700' },
+
+  // Ministry event type chips
+  typeChipRow: { gap: 8, paddingBottom: 4 },
+  typeChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 999, borderWidth: 1.5, borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  typeChipActive: { backgroundColor: colors.primaryLight, borderColor: colors.primary },
+  typeChipText: { fontSize: 12, fontWeight: '700', color: colors.textTertiary },
+  typeChipTextActive: { color: colors.primary },
 });
 
 // Section card styles
@@ -1633,6 +1982,7 @@ const conn = StyleSheet.create({
     backgroundColor: '#FDE68A', justifyContent: 'center', alignItems: 'center',
   },
   headerText: { fontSize: 13, fontWeight: '800', color: '#92400E' },
+  stopLabel: { flex: 1, fontSize: 11, fontWeight: '600', marginHorizontal: 8 },
   removeBtn: {
     width: 22, height: 22, borderRadius: 11,
     backgroundColor: '#FEE2E2', justifyContent: 'center', alignItems: 'center',

@@ -113,15 +113,17 @@ export default function HomeScreen() {
   // append first card at end so swipe past last loops back seamlessly
   const carouselEvents = heroEvents.length > 0 ? [...heroEvents, heroEvents[0]] : [];
 
-  const restEvents = upcomingEvents.slice(0, 8);
+  const MAX_HOME_EVENTS = 5;
 
   const allRegions = [...new Set(
     upcomingEvents.map(e => e.venue?.region).filter(Boolean) as string[]
   )].sort();
 
-  const filteredRestEvents = regionFilter
-    ? upcomingEvents.filter(e => e.venue?.region === regionFilter).slice(0, 8)
-    : restEvents;
+  const filteredAll = regionFilter
+    ? upcomingEvents.filter(e => e.venue?.region === regionFilter)
+    : upcomingEvents;
+  const filteredRestEvents = filteredAll.slice(0, MAX_HOME_EVENTS);
+  const hasMoreEvents = filteredAll.length > MAX_HOME_EVENTS;
   const todayEvents = upcomingEvents.filter(
     (e) => new Date(e.date_start).toDateString() === new Date().toDateString()
   );
@@ -436,6 +438,17 @@ export default function HomeScreen() {
                       </TouchableOpacity>
                     );
                   })}
+
+                  {hasMoreEvents && (
+                    <TouchableOpacity
+                      style={styles.seeMoreBtn}
+                      onPress={() => navigation.navigate('Main', { screen: 'Events' })}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.seeMoreText}>See All Events</Text>
+                      <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </>
@@ -797,6 +810,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   regionEmptyText: { fontSize: 13, color: colors.textTertiary },
+
+  seeMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 4,
+    paddingVertical: 13,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1,
+    borderColor: colors.primaryMid,
+  },
+  seeMoreText: { fontSize: 14, fontWeight: '700', color: colors.primary },
 
   // FAB
   fab: {

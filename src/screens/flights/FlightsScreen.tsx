@@ -104,13 +104,18 @@ export default function FlightsScreen() {
     [startOfToday]
   );
 
+  const hasFlight = useCallback(
+    (e: Event) => !!(e.travel?.flight_booked || e.travel?.return_flight_booked || e.event_type === 'travel'),
+    []
+  );
+
   const upcoming = useMemo(() =>
-    events.filter(e => isUpcoming(e) && matchesSearch(e)),
-    [events, matchesSearch, isUpcoming]
+    events.filter(e => hasFlight(e) && isUpcoming(e) && matchesSearch(e)),
+    [events, hasFlight, matchesSearch, isUpcoming]
   );
   const past = useMemo(() =>
-    events.filter(e => !isUpcoming(e) && matchesSearch(e)),
-    [events, matchesSearch, isUpcoming]
+    events.filter(e => hasFlight(e) && !isUpcoming(e) && matchesSearch(e)),
+    [events, hasFlight, matchesSearch, isUpcoming]
   );
 
   return (
@@ -129,7 +134,7 @@ export default function FlightsScreen() {
           <View>
             <Text style={styles.headerTitle}>My Trips</Text>
             {!loading && (
-              <Text style={styles.headerSub}>{events.length} trip{events.length !== 1 ? 's' : ''} total</Text>
+              <Text style={styles.headerSub}>{upcoming.length + past.length} trip{upcoming.length + past.length !== 1 ? 's' : ''} total</Text>
             )}
           </View>
           <View style={styles.headerPlane}>
@@ -243,64 +248,6 @@ export default function FlightsScreen() {
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
-function StopRow({ index, stop, fmt, eventTitle }: { index: number; stop: ConnectionStop; fmt: (iso: string | undefined | null) => string; eventTitle?: string }) {
-  return (
-    <View style={mStyles.stopRow}>
-      <View style={mStyles.stopBorder} />
-      <View style={{ flex: 1, gap: 3 }}>
-        <View style={mStyles.stopHeaderRow}>
-          <View style={mStyles.stopDot} />
-          <Text style={mStyles.stopLabel}>Stop {index + 1}{stop.airport ? ` · ${stop.airport}` : ''}</Text>
-        </View>
-        {stop.airport_name && (
-          <Text style={mStyles.stopDetail}>
-            <Text style={mStyles.stopDetailMuted}>Airport  </Text>
-            {stop.airport_name}
-          </Text>
-        )}
-        {(stop.flight_number || stop.airline) && (
-          <Text style={mStyles.stopDetail}>
-            <Text style={mStyles.stopDetailMuted}>Flight  </Text>
-            {[stop.flight_number, stop.airline].filter(Boolean).join(' · ')}
-          </Text>
-        )}
-        {stop.departure_time && (
-          <Text style={mStyles.stopDetail}>
-            <Text style={mStyles.stopDetailMuted}>Departs  </Text>
-            {fmt(stop.departure_time)}
-          </Text>
-        )}
-        {stop.arrival_time && (
-          <Text style={mStyles.stopDetail}>
-            <Text style={mStyles.stopDetailMuted}>Arrives  </Text>
-            {fmt(stop.arrival_time)}
-          </Text>
-        )}
-        {stop.ticket_url && (
-          <View style={mStyles.stopTicketRow}>
-            <TouchableOpacity
-              style={mStyles.stopTicketBtn}
-              onPress={() => Linking.openURL(stop.ticket_url!)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="document-text-outline" size={13} color={colors.primary} />
-              <Text style={mStyles.stopTicketText}>View Ticket</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={mStyles.waBtnSm}
-              onPress={() => shareViaWhatsApp(ticketMessage(`Connection ${index + 1}${stop.airport ? ` · ${stop.airport}` : ''}`, stop.ticket_url!, eventTitle))}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="logo-whatsapp" size={14} color="#fff" />
-              <Text style={mStyles.waTextSm}>Share</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
-
 function DetailRow({ icon, label, value, valueColor }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; valueColor?: string }) {
   return (
     <View style={mStyles.detailRow}>
@@ -326,10 +273,23 @@ export function FlightDetailModal({
 }) {
   if (!event) return null;
 
-  const dest = event.venue?.city ?? event.venue?.country ?? event.title;
-  const gradient = gradientFor(dest);
   const t = event.travel;
   const hasReturn = t?.return_flight_booked ?? false;
+
+  const origin = t?.boarding_point ?? '—';
+  const destination = t?.deboarding_point || event.venue?.city || '—';
+
+  const dest = destination !== '—' ? destination : (event.venue?.city ?? event.venue?.country ?? event.title);
+  const gradient = gradientFor(dest);
+  const returnOrigin = t?.return_boarding_point ?? '—';
+  const returnDest = t?.return_deboarding_point || event.venue?.city || '—';
+
+  const outStops = (t?.connections ?? []).filter(
+    (s) => s.airport || s.checkin_airport || s.arrival_airport || s.flight_number || s.airline || s.departure_time || s.checkin_time || s.arrival_time || s.ticket_url
+  );
+  const retStops = (t?.return_connections ?? []).filter(
+    (s) => s.airport || s.checkin_airport || s.arrival_airport || s.flight_number || s.airline || s.departure_time || s.checkin_time || s.arrival_time || s.ticket_url
+  );
 
   function fmt(iso: string | undefined | null) {
     if (!iso) return '—';
@@ -374,14 +334,24 @@ export function FlightDetailModal({
               </TouchableOpacity>
             </View>
 
-            {/* Event date range */}
+            {/* Flight route + departure date */}
             <View style={mStyles.modalDateRow}>
-              <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.7)" />
+              <Ionicons name="airplane-outline" size={13} color="rgba(255,255,255,0.7)" />
               <Text style={mStyles.modalDateText}>
-                {fmtDate(event.date_start)}
-                {event.date_end ? `  →  ${fmtDate(event.date_end)}` : ''}
+                {origin !== '—' ? `${origin}  →  ${destination}` : destination}
               </Text>
             </View>
+            {(t?.departure_time || event.date_start) && (
+              <View style={mStyles.modalDateRow}>
+                <Ionicons name="calendar-outline" size={13} color="rgba(255,255,255,0.7)" />
+                <Text style={mStyles.modalDateText}>
+                  {fmtDate(t?.departure_time ?? event.date_start)}
+                  {hasReturn && t?.return_departure_time
+                    ? `  →  ${fmtDate(t.return_departure_time)}`
+                    : event.date_end ? `  →  ${fmtDate(event.date_end)}` : ''}
+                </Text>
+              </View>
+            )}
           </LinearGradient>
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={mStyles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -389,60 +359,91 @@ export function FlightDetailModal({
             {/* ── Outbound flight ── */}
             {t && (
               <>
-                <Text style={mStyles.sectionHead}>Outbound Flight</Text>
-
+                <View style={mStyles.sectionHeadRow}>
+                  <Text style={mStyles.sectionHead}>Outbound Flight</Text>
+                  {outStops.length > 0 && (
+                    <View style={styles.connectingBadge}>
+                      <Ionicons name="git-network-outline" size={9} color="#D97706" />
+                      <Text style={styles.connectingBadgeText}>Connecting</Text>
+                    </View>
+                  )}
+                </View>
                 <View style={mStyles.card}>
-                  {(t.boarding_point || t.deboarding_point) && (
+                  {/* LEG 1 header — only when connecting */}
+                  {outStops.length > 0 && (
+                    <View style={mStyles.legHeader}>
+                      <View style={[mStyles.legBadge, { backgroundColor: colors.primary }]}>
+                        <Ionicons name="airplane" size={9} color="#fff" />
+                        <Text style={mStyles.legBadgeText}>LEG 1</Text>
+                      </View>
+                      <Text style={mStyles.legRoute} numberOfLines={1}>
+                        {origin}  →  {outStops[0].airport || destination}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Non-connecting route row */}
+                  {outStops.length === 0 && (t.boarding_point || t.deboarding_point) && (
                     <View style={mStyles.routeRow}>
-                      <Text style={mStyles.routeFrom} numberOfLines={1}>{t.boarding_point ?? '—'}</Text>
+                      <Text style={mStyles.routeFrom} numberOfLines={1}>{origin}</Text>
                       <Ionicons name="airplane" size={18} color={colors.primary} style={{ marginHorizontal: 6 }} />
-                      <Text style={mStyles.routeTo} numberOfLines={1}>{t.deboarding_point ?? '—'}</Text>
+                      <Text style={mStyles.routeTo} numberOfLines={1}>{destination}</Text>
                     </View>
                   )}
                   <View style={mStyles.divider} />
-
-                  {(t.flight_number || t.airline) && (
-                    <DetailRow icon="airplane-outline" label="Flight" value={[t.flight_number, t.airline].filter(Boolean).join(' · ')} />
-                  )}
-                  {t.checkin_airport && (
-                    <DetailRow icon="business-outline" label="Check-in Airport" value={t.checkin_airport} />
-                  )}
-                  {t.departure_time && (
-                    <DetailRow icon="exit-outline" label="Departure" value={fmt(t.departure_time)} />
-                  )}
-                  {(t.connections ?? []).map((stop, idx) => (
-                    <StopRow key={idx} index={idx} stop={stop} fmt={fmt} eventTitle={event.title} />
-                  ))}
-                  {t.arrival_airport && (
-                    <DetailRow icon="business-outline" label="Arrival Airport" value={t.arrival_airport} />
-                  )}
-                  {t.arrival_time && (
-                    <DetailRow icon="enter-outline" label="Arrival" value={fmt(t.arrival_time)} />
-                  )}
-                  {t.checkin_time && (
-                    <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(t.checkin_time)} />
-                  )}
+                  {(t.flight_number || t.airline) && <DetailRow icon="airplane-outline" label="Flight" value={[t.flight_number, t.airline].filter(Boolean).join(' · ')} />}
+                  {t.checkin_airport && <DetailRow icon="business-outline" label="Check-in Airport" value={t.checkin_airport} />}
+                  {t.departure_time && <DetailRow icon="exit-outline" label="Departure" value={fmt(t.departure_time)} />}
+                  {t.arrival_airport && <DetailRow icon="business-outline" label="Arrival Airport" value={t.arrival_airport} />}
+                  {t.arrival_time && <DetailRow icon="enter-outline" label="Arrival" value={fmt(t.arrival_time)} />}
+                  {t.checkin_time && <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(t.checkin_time)} />}
                   {t.flight_ticket_url && (
                     <View style={mStyles.ticketActionRow}>
-                      <TouchableOpacity
-                        style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]}
-                        onPress={() => Linking.openURL(t.flight_ticket_url!)}
-                      >
+                      <TouchableOpacity style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]} onPress={() => Linking.openURL(t.flight_ticket_url!)}>
                         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
                           <Ionicons name="document-text-outline" size={14} color="#fff" />
-                          <Text style={mStyles.ticketBtnText}>View Ticket</Text>
+                          <Text style={mStyles.ticketBtnText}>{outStops.length > 0 ? 'Leg 1 Ticket' : 'View Ticket'}</Text>
                         </LinearGradient>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={mStyles.waBtn}
-                        onPress={() => shareViaWhatsApp(ticketMessage('Outbound flight ticket', t.flight_ticket_url!, event.title))}
-                        activeOpacity={0.85}
-                      >
+                      <TouchableOpacity style={mStyles.waBtn} onPress={() => shareViaWhatsApp(ticketMessage('Outbound flight ticket', t.flight_ticket_url!, event.title))} activeOpacity={0.85}>
                         <Ionicons name="logo-whatsapp" size={16} color="#fff" />
                         <Text style={mStyles.waText}>Share</Text>
                       </TouchableOpacity>
                     </View>
                   )}
+                  {outStops.map((stop, idx) => (
+                    <React.Fragment key={idx}>
+                      <View style={mStyles.legHeader}>
+                        <View style={[mStyles.legBadge, { backgroundColor: colors.primary }]}>
+                          <Ionicons name="airplane" size={9} color="#fff" />
+                          <Text style={mStyles.legBadgeText}>LEG {idx + 2}</Text>
+                        </View>
+                        <Text style={mStyles.legRoute} numberOfLines={1}>
+                          {stop.airport || '?'}  →  {outStops[idx + 1]?.airport || destination}
+                        </Text>
+                      </View>
+                      <View style={mStyles.divider} />
+                      {(stop.flight_number || stop.airline) && <DetailRow icon="airplane-outline" label="Flight" value={[stop.flight_number, stop.airline].filter(Boolean).join(' · ')} />}
+                      {stop.checkin_airport && <DetailRow icon="business-outline" label="Check-in Airport" value={stop.checkin_airport} />}
+                      {stop.departure_time && <DetailRow icon="exit-outline" label="Departure" value={fmt(stop.departure_time)} />}
+                      {stop.arrival_airport && <DetailRow icon="business-outline" label="Arrival Airport" value={stop.arrival_airport} />}
+                      {stop.arrival_time && <DetailRow icon="enter-outline" label="Arrival" value={fmt(stop.arrival_time)} />}
+                      {stop.checkin_time && <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(stop.checkin_time)} />}
+                      {stop.ticket_url && (
+                        <View style={mStyles.ticketActionRow}>
+                          <TouchableOpacity style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]} onPress={() => Linking.openURL(stop.ticket_url!)}>
+                            <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
+                              <Ionicons name="document-text-outline" size={14} color="#fff" />
+                              <Text style={mStyles.ticketBtnText}>Leg {idx + 2} Ticket</Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={mStyles.waBtn} onPress={() => shareViaWhatsApp(ticketMessage(`Leg ${idx + 2}${stop.airport ? ` · ${stop.airport}` : ''}`, stop.ticket_url!, event.title))} activeOpacity={0.85}>
+                            <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+                            <Text style={mStyles.waText}>Share</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </React.Fragment>
+                  ))}
                 </View>
               </>
             )}
@@ -450,60 +451,89 @@ export function FlightDetailModal({
             {/* ── Return flight ── */}
             {hasReturn && t && (
               <>
-                <Text style={mStyles.sectionHead}>Return Flight</Text>
-
+                <View style={mStyles.sectionHeadRow}>
+                  <Text style={mStyles.sectionHead}>Return Flight</Text>
+                  {retStops.length > 0 && (
+                    <View style={styles.connectingBadge}>
+                      <Ionicons name="git-network-outline" size={9} color="#D97706" />
+                      <Text style={styles.connectingBadgeText}>Connecting</Text>
+                    </View>
+                  )}
+                </View>
                 <View style={mStyles.card}>
-                  {(t.return_boarding_point || t.return_deboarding_point) && (
+                  {retStops.length > 0 && (
+                    <View style={mStyles.legHeader}>
+                      <View style={[mStyles.legBadge, { backgroundColor: '#059669' }]}>
+                        <Ionicons name="airplane" size={9} color="#fff" />
+                        <Text style={mStyles.legBadgeText}>LEG 1</Text>
+                      </View>
+                      <Text style={[mStyles.legRoute, { color: '#059669' }]} numberOfLines={1}>
+                        {returnOrigin}  →  {retStops[0].airport || returnDest}
+                      </Text>
+                    </View>
+                  )}
+                  {retStops.length === 0 && (t.return_boarding_point || t.return_deboarding_point) && (
                     <View style={mStyles.routeRow}>
-                      <Text style={[mStyles.routeFrom, { color: '#059669' }]} numberOfLines={1}>{t.return_boarding_point ?? '—'}</Text>
+                      <Text style={[mStyles.routeFrom, { color: '#059669' }]} numberOfLines={1}>{returnOrigin}</Text>
                       <Ionicons name="airplane" size={18} color="#059669" style={{ marginHorizontal: 6 }} />
-                      <Text style={[mStyles.routeTo, { color: '#059669' }]} numberOfLines={1}>{t.return_deboarding_point ?? '—'}</Text>
+                      <Text style={[mStyles.routeTo, { color: '#059669' }]} numberOfLines={1}>{returnDest}</Text>
                     </View>
                   )}
                   <View style={mStyles.divider} />
-
-                  {(t.return_flight_number || t.return_airline) && (
-                    <DetailRow icon="airplane-outline" label="Flight" value={[t.return_flight_number, t.return_airline].filter(Boolean).join(' · ')} valueColor="#059669" />
-                  )}
-                  {t.return_checkin_airport && (
-                    <DetailRow icon="business-outline" label="Check-in Airport" value={t.return_checkin_airport} valueColor="#059669" />
-                  )}
-                  {t.return_departure_time && (
-                    <DetailRow icon="exit-outline" label="Departure" value={fmt(t.return_departure_time)} valueColor="#059669" />
-                  )}
-                  {(t.return_connections ?? []).map((stop, idx) => (
-                    <StopRow key={idx} index={idx} stop={stop} fmt={fmt} eventTitle={event.title} />
-                  ))}
-                  {t.return_arrival_airport && (
-                    <DetailRow icon="business-outline" label="Arrival Airport" value={t.return_arrival_airport} valueColor="#059669" />
-                  )}
-                  {t.return_arrival_time && (
-                    <DetailRow icon="enter-outline" label="Arrival" value={fmt(t.return_arrival_time)} valueColor="#059669" />
-                  )}
-                  {t.return_checkin_time && (
-                    <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(t.return_checkin_time)} valueColor="#059669" />
-                  )}
+                  {(t.return_flight_number || t.return_airline) && <DetailRow icon="airplane-outline" label="Flight" value={[t.return_flight_number, t.return_airline].filter(Boolean).join(' · ')} valueColor="#059669" />}
+                  {t.return_checkin_airport && <DetailRow icon="business-outline" label="Check-in Airport" value={t.return_checkin_airport} valueColor="#059669" />}
+                  {t.return_departure_time && <DetailRow icon="exit-outline" label="Departure" value={fmt(t.return_departure_time)} valueColor="#059669" />}
+                  {t.return_arrival_airport && <DetailRow icon="business-outline" label="Arrival Airport" value={t.return_arrival_airport} valueColor="#059669" />}
+                  {t.return_arrival_time && <DetailRow icon="enter-outline" label="Arrival" value={fmt(t.return_arrival_time)} valueColor="#059669" />}
+                  {t.return_checkin_time && <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(t.return_checkin_time)} valueColor="#059669" />}
                   {t.return_ticket_pdf_url && (
                     <View style={mStyles.ticketActionRow}>
-                      <TouchableOpacity
-                        style={[{ flex: 1, overflow: 'hidden', borderRadius: 10 }]}
-                        onPress={() => Linking.openURL(t.return_ticket_pdf_url!)}
-                      >
+                      <TouchableOpacity style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]} onPress={() => Linking.openURL(t.return_ticket_pdf_url!)}>
                         <LinearGradient colors={['#059669', '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
                           <Ionicons name="document-text-outline" size={14} color="#fff" />
-                          <Text style={mStyles.ticketBtnText}>View Return Ticket</Text>
+                          <Text style={mStyles.ticketBtnText}>{retStops.length > 0 ? 'Leg 1 Ticket' : 'View Return Ticket'}</Text>
                         </LinearGradient>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={mStyles.waBtn}
-                        onPress={() => shareViaWhatsApp(ticketMessage('Return flight ticket', t.return_ticket_pdf_url!, event.title))}
-                        activeOpacity={0.85}
-                      >
+                      <TouchableOpacity style={mStyles.waBtn} onPress={() => shareViaWhatsApp(ticketMessage('Return flight ticket', t.return_ticket_pdf_url!, event.title))} activeOpacity={0.85}>
                         <Ionicons name="logo-whatsapp" size={16} color="#fff" />
                         <Text style={mStyles.waText}>Share</Text>
                       </TouchableOpacity>
                     </View>
                   )}
+                  {retStops.map((stop, idx) => (
+                    <React.Fragment key={idx}>
+                      <View style={mStyles.legHeader}>
+                        <View style={[mStyles.legBadge, { backgroundColor: '#059669' }]}>
+                          <Ionicons name="airplane" size={9} color="#fff" />
+                          <Text style={mStyles.legBadgeText}>LEG {idx + 2}</Text>
+                        </View>
+                        <Text style={[mStyles.legRoute, { color: '#059669' }]} numberOfLines={1}>
+                          {stop.airport || '?'}  →  {retStops[idx + 1]?.airport || returnDest}
+                        </Text>
+                      </View>
+                      <View style={mStyles.divider} />
+                      {(stop.flight_number || stop.airline) && <DetailRow icon="airplane-outline" label="Flight" value={[stop.flight_number, stop.airline].filter(Boolean).join(' · ')} valueColor="#059669" />}
+                      {stop.checkin_airport && <DetailRow icon="business-outline" label="Check-in Airport" value={stop.checkin_airport} valueColor="#059669" />}
+                      {stop.departure_time && <DetailRow icon="exit-outline" label="Departure" value={fmt(stop.departure_time)} valueColor="#059669" />}
+                      {stop.arrival_airport && <DetailRow icon="business-outline" label="Arrival Airport" value={stop.arrival_airport} valueColor="#059669" />}
+                      {stop.arrival_time && <DetailRow icon="enter-outline" label="Arrival" value={fmt(stop.arrival_time)} valueColor="#059669" />}
+                      {stop.checkin_time && <DetailRow icon="time-outline" label="Check-in Time" value={fmtTime(stop.checkin_time)} valueColor="#059669" />}
+                      {stop.ticket_url && (
+                        <View style={mStyles.ticketActionRow}>
+                          <TouchableOpacity style={[mStyles.ticketBtn, { flex: 1, overflow: 'hidden', borderRadius: 10 }]} onPress={() => Linking.openURL(stop.ticket_url!)}>
+                            <LinearGradient colors={['#059669', '#16A34A'] as [string,string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={mStyles.ticketBtnGrad}>
+                              <Ionicons name="document-text-outline" size={14} color="#fff" />
+                              <Text style={mStyles.ticketBtnText}>Leg {idx + 2} Ticket</Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={mStyles.waBtn} onPress={() => shareViaWhatsApp(ticketMessage(`Leg ${idx + 2}${stop.airport ? ` · ${stop.airport}` : ''}`, stop.ticket_url!, event.title))} activeOpacity={0.85}>
+                            <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+                            <Text style={mStyles.waText}>Share</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </React.Fragment>
+                  ))}
                 </View>
               </>
             )}
@@ -543,30 +573,108 @@ export function FlightDetailModal({
   );
 }
 
+// ── ConnLegCard ───────────────────────────────────────────────────────────────
+
+function ConnLegCard({
+  legNum, fromCity, toCity, flight, depTime, arrTime,
+  checkinAirport, arrivalAirport, ticketUrl, color, fmtFn,
+}: {
+  legNum: number; fromCity: string; toCity: string;
+  flight?: string; depTime?: string | null; arrTime?: string | null;
+  checkinAirport?: string | null; arrivalAirport?: string | null;
+  ticketUrl?: string | null; color: string;
+  fmtFn: (iso?: string | null) => string;
+}) {
+  const t = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }) : null;
+  const d = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleDateString('en', { day: 'numeric', month: 'short' }) : null;
+
+  return (
+    <View style={[styles.legCard, { borderColor: color + '35' }]}>
+      {/* Header band */}
+      <LinearGradient
+        colors={[color + '28', color + '0C'] as [string, string]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={styles.legHeader}
+      >
+        <View style={[styles.legNumBadge, { backgroundColor: color }]}>
+          <Ionicons name="airplane" size={9} color="#fff" />
+          <Text style={styles.legNumText}>LEG {legNum}</Text>
+        </View>
+        {!!flight && (
+          <Text style={[styles.legFlightLabel, { color }]} numberOfLines={1}>{flight}</Text>
+        )}
+      </LinearGradient>
+
+      {/* Route: from city ── ✈ ── to city */}
+      <View style={styles.legRouteRow}>
+        <View style={styles.legCityCol}>
+          <Text style={styles.legCityName} numberOfLines={1}>{fromCity}</Text>
+          {!!checkinAirport && <Text style={[styles.legAirportCode, { color }]}>{checkinAirport}</Text>}
+          {!!depTime && (
+            <Text style={styles.legTimeText}>{t(depTime)}{d(depTime) ? `\n${d(depTime)}` : ''}</Text>
+          )}
+        </View>
+
+        <View style={styles.legMid}>
+          <View style={[styles.legDot, { backgroundColor: color }]} />
+          <View style={[styles.legDash, { backgroundColor: color + '40' }]} />
+          <View style={[styles.legPlaneCircle, { backgroundColor: color + '15', borderColor: color + '35' }]}>
+            <Ionicons name="airplane" size={13} color={color} />
+          </View>
+          <View style={[styles.legDash, { backgroundColor: color + '40' }]} />
+          <View style={[styles.legDot, { backgroundColor: color }]} />
+        </View>
+
+        <View style={[styles.legCityCol, { alignItems: 'flex-end' }]}>
+          <Text style={[styles.legCityName, { textAlign: 'right' }]} numberOfLines={1}>{toCity}</Text>
+          {!!arrivalAirport && <Text style={[styles.legAirportCode, { color, textAlign: 'right' }]}>{arrivalAirport}</Text>}
+          {!!arrTime && (
+            <Text style={[styles.legTimeText, { textAlign: 'right' }]}>{t(arrTime)}{d(arrTime) ? `\n${d(arrTime)}` : ''}</Text>
+          )}
+        </View>
+      </View>
+
+      {/* Ticket button */}
+      {!!ticketUrl && (
+        <TouchableOpacity
+          onPress={() => Linking.openURL(ticketUrl!)}
+          style={[styles.legTicketBtn, { borderTopColor: color + '25', backgroundColor: color + '08' }]}
+        >
+          <Ionicons name="document-text-outline" size={13} color={color} />
+          <Text style={[styles.legTicketText, { color }]}>View Leg {legNum} Ticket</Text>
+          <Ionicons name="chevron-forward" size={12} color={color} />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
 // ── TripCard ──────────────────────────────────────────────────────────────────
 
 function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
-  const dest = event.venue?.city ?? event.venue?.country ?? event.title;
+  const dest = event.travel?.deboarding_point ?? event.venue?.city ?? event.venue?.country ?? event.title;
   const gradient = gradientFor(dest);
-  const depTime = formatTime(event.travel?.departure_time);
+  const depTime = formatTime(event.travel?.checkin_time);
   const arrTime = formatTime(event.travel?.arrival_time);
   const origin = event.travel?.boarding_point ?? '—';
-  const destination = event.travel?.deboarding_point ?? '—';
+  const destination = event.travel?.deboarding_point || event.venue?.city || event.venue?.country || '—';
 
   const hasReturn = event.travel?.return_flight_booked ?? false;
   const returnOrigin = event.travel?.return_boarding_point ?? '—';
-  const returnDest = event.travel?.return_deboarding_point ?? '—';
-  const retDepTime = formatTime(event.travel?.return_departure_time);
+  const returnDest = event.travel?.return_deboarding_point || event.venue?.city || event.venue?.country || '—';
+  const retDepTime = formatTime(event.travel?.return_checkin_time);
   const retArrTime = formatTime(event.travel?.return_arrival_time);
 
   const [showConn, setShowConn] = useState(false);
   const [showRetConn, setShowRetConn] = useState(false);
 
   const outStops = (event.travel?.connections ?? []).filter(
-    (s) => s.airport || s.airport_name || s.flight_number || s.airline || s.departure_time || s.arrival_time || s.ticket_url
+    (s) => s.airport || s.checkin_airport || s.arrival_airport || s.flight_number || s.airline || s.departure_time || s.checkin_time || s.arrival_time || s.ticket_url
   );
   const retStops = (event.travel?.return_connections ?? []).filter(
-    (s) => s.airport || s.airport_name || s.flight_number || s.airline || s.departure_time || s.arrival_time || s.ticket_url
+    (s) => s.airport || s.checkin_airport || s.arrival_airport || s.flight_number || s.airline || s.departure_time || s.checkin_time || s.arrival_time || s.ticket_url
   );
   const outRoute = [origin, ...outStops.map((s) => s.airport || '?'), destination];
   const retRoute = [returnOrigin, ...retStops.map((s) => s.airport || '?'), returnDest];
@@ -585,9 +693,35 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
         {/* Top row: destination + date */}
         <View style={styles.bannerTop}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.bannerCity} numberOfLines={1}>{dest}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={styles.bannerCity} numberOfLines={1}>{dest}</Text>
+              {event.event_type === 'travel' && (
+                <View style={styles.travelOnlyBadge}>
+                  <Ionicons name="person-outline" size={9} color="#fff" />
+                  <Text style={styles.travelOnlyBadgeText}>TRAVEL</Text>
+                </View>
+              )}
+              {outStops.length > 0 && (
+                <View style={styles.connectingBadge}>
+                  <Ionicons name="git-network-outline" size={9} color="#D97706" />
+                  <Text style={styles.connectingBadgeText}>Connecting</Text>
+                </View>
+              )}
+            </View>
             {event.venue?.country ? <Text style={styles.destCountry}>{event.venue.country}</Text> : null}
             <Text style={styles.bannerEventTitle} numberOfLines={1}>{event.title}</Text>
+            {(origin !== '—' || destination !== '—') && (
+              <View style={styles.bannerRouteRow}>
+                {[origin, ...outStops.map(s => s.airport).filter(Boolean), destination]
+                  .filter(p => p && p !== '—')
+                  .map((city, i, arr) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && <Ionicons name="arrow-forward" size={9} color="rgba(255,255,255,0.55)" />}
+                      <Text style={[styles.bannerRouteCity, i === arr.length - 1 && { color: '#fff', fontWeight: '800' }]}>{city}</Text>
+                    </React.Fragment>
+                  ))}
+              </View>
+            )}
           </View>
 
           {/* Date block top-right — flight departure date */}
@@ -606,90 +740,83 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
         {/* Full-width: route, title, then details in two mini-columns */}
         <View style={styles.infoFull}>
 
-          {/* Route */}
-          <View style={styles.routeRow}>
-            <Text style={styles.routeFrom} numberOfLines={1}>{origin}</Text>
-            <Ionicons name="airplane" size={16} color={colors.primary} style={styles.routeArrowIcon} />
-            <Text style={styles.routeTo} numberOfLines={1}>{destination}</Text>
-          </View>
-          {outStops.length > 0 && (
+          {outStops.length > 0 ? (
+            <View style={styles.legList}>
+              <ConnLegCard
+                legNum={1}
+                fromCity={origin}
+                toCity={outStops[0].airport || destination}
+                flight={[event.travel?.flight_number, event.travel?.airline].filter(Boolean).join(' · ') || undefined}
+                depTime={event.travel?.checkin_time}
+                arrTime={event.travel?.arrival_time}
+                checkinAirport={event.travel?.checkin_airport}
+                arrivalAirport={event.travel?.arrival_airport}
+                ticketUrl={event.travel?.flight_ticket_url}
+                color={colors.primary}
+                fmtFn={fmtDT}
+              />
+              {outStops.map((stop, idx) => (
+                <ConnLegCard
+                  key={idx}
+                  legNum={idx + 2}
+                  fromCity={stop.airport || '?'}
+                  toCity={outStops[idx + 1]?.airport || destination}
+                  flight={[stop.flight_number, stop.airline].filter(Boolean).join(' · ') || undefined}
+                  depTime={stop.checkin_time}
+                  arrTime={stop.arrival_time}
+                  checkinAirport={stop.checkin_airport}
+                  arrivalAirport={stop.arrival_airport}
+                  ticketUrl={stop.ticket_url}
+                  color={colors.primary}
+                  fmtFn={fmtDT}
+                />
+              ))}
+            </View>
+          ) : (
             <>
-              <View style={styles.subRouteRow}>
-                {outRoute.map((p, i) => (
-                  <React.Fragment key={i}>
-                    {i > 0 && <Ionicons name="arrow-forward" size={9} color="#94A3B8" />}
-                    <Text style={styles.subRouteText}>{p}</Text>
-                  </React.Fragment>
-                ))}
+              <View style={styles.divider} />
+              <View style={styles.detailsGrid}>
+                {(event.travel?.flight_number || event.travel?.airline) && (
+                  <View style={styles.detailItem}>
+                    <Ionicons name="airplane-outline" size={12} color={colors.primary} />
+                    <View>
+                      <Text style={styles.detailLabel}>Flight</Text>
+                      <Text style={styles.detailValue}>
+                        {[event.travel?.flight_number, event.travel?.airline].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                {depTime && (
+                  <View style={styles.detailItem}>
+                    <Ionicons name="time-outline" size={12} color={colors.primary} />
+                    <View>
+                      <Text style={styles.detailLabel}>Check-in</Text>
+                      <Text style={styles.detailValue}>{depTime ?? '--:--'}</Text>
+                    </View>
+                  </View>
+                )}
+                {origin !== '—' && (
+                  <View style={styles.detailItem}>
+                    <Ionicons name="navigate-outline" size={12} color={colors.primary} />
+                    <View>
+                      <Text style={styles.detailLabel}>Boarding</Text>
+                      <Text style={styles.detailValue} numberOfLines={1}>{origin}</Text>
+                    </View>
+                  </View>
+                )}
+                {destination !== '—' && (
+                  <View style={styles.detailItem}>
+                    <Ionicons name="location-outline" size={12} color={colors.primary} />
+                    <View>
+                      <Text style={styles.detailLabel}>Deboarding</Text>
+                      <Text style={styles.detailValue} numberOfLines={1}>{destination}</Text>
+                    </View>
+                  </View>
+                )}
               </View>
-              <TouchableOpacity
-                style={styles.connToggle}
-                onPress={() => setShowConn((v) => !v)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="git-branch-outline" size={12} color="#D97706" />
-                <Text style={styles.connToggleText}>
-                  {showConn ? 'Hide' : 'View'} {outStops.length === 1 ? '1 connecting flight' : `${outStops.length} connecting flights`}
-                </Text>
-                <Ionicons name={showConn ? 'chevron-up' : 'chevron-down'} size={14} color="#D97706" />
-              </TouchableOpacity>
-              {showConn && (
-                <View style={styles.connList}>
-                  {outStops.map((stop, idx) => (
-                    <StopRow key={idx} index={idx} stop={stop} fmt={fmtDT} eventTitle={event.title} />
-                  ))}
-                </View>
-              )}
             </>
           )}
-
-          <View style={styles.divider} />
-
-          {/* Details row */}
-          <View style={styles.detailsGrid}>
-            {(event.travel?.flight_number || event.travel?.airline) && (
-              <View style={styles.detailItem}>
-                <Ionicons name="airplane-outline" size={12} color={colors.primary} />
-                <View>
-                  <Text style={styles.detailLabel}>Flight</Text>
-                  <Text style={styles.detailValue}>
-                    {[event.travel.flight_number, event.travel.airline].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {(depTime || arrTime) && (
-              <View style={styles.detailItem}>
-                <Ionicons name="time-outline" size={12} color={colors.primary} />
-                <View>
-                  <Text style={styles.detailLabel}>Flight time</Text>
-                  <Text style={styles.detailValue}>{depTime ?? '--:--'} → {arrTime ?? '--:--'}</Text>
-                </View>
-              </View>
-            )}
-
-            {origin !== '—' && (
-              <View style={styles.detailItem}>
-                <Ionicons name="navigate-outline" size={12} color={colors.primary} />
-                <View>
-                  <Text style={styles.detailLabel}>Boarding</Text>
-                  <Text style={styles.detailValue} numberOfLines={1}>{origin}</Text>
-                </View>
-              </View>
-            )}
-
-            {destination !== '—' && (
-              <View style={styles.detailItem}>
-                <Ionicons name="location-outline" size={12} color={colors.primary} />
-                <View>
-                  <Text style={styles.detailLabel}>Deboarding</Text>
-                  <Text style={styles.detailValue} numberOfLines={1}>{destination}</Text>
-                </View>
-              </View>
-            )}
-
-          </View>
 
           {/* ── Return flight ── */}
           {hasReturn && (
@@ -730,52 +857,81 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
                 )}
               </View>
 
-              {(event.travel?.return_flight_number || event.travel?.return_airline || retDepTime || retArrTime) && (
-                <View style={styles.detailsGrid}>
-                  {(event.travel?.return_flight_number || event.travel?.return_airline) && (
-                    <View style={styles.detailItem}>
-                      <Ionicons name="airplane-outline" size={12} color="#059669" />
-                      <View>
-                        <Text style={styles.detailLabel}>Return flight</Text>
-                        <Text style={[styles.detailValue, { color: '#059669' }]}>
-                          {[event.travel.return_flight_number, event.travel.return_airline].filter(Boolean).join(' · ')}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                  {(retDepTime || retArrTime) && (
-                    <View style={styles.detailItem}>
-                      <Ionicons name="time-outline" size={12} color="#059669" />
-                      <View>
-                        <Text style={styles.detailLabel}>Return time</Text>
-                        <Text style={[styles.detailValue, { color: '#059669' }]}>{retDepTime ?? '--:--'} → {retArrTime ?? '--:--'}</Text>
-                      </View>
-                    </View>
-                  )}
+              {retStops.length > 0 ? (
+                <View style={styles.legList}>
+                  <ConnLegCard
+                    legNum={1}
+                    fromCity={returnOrigin}
+                    toCity={retStops[0].airport || returnDest}
+                    flight={[event.travel?.return_flight_number, event.travel?.return_airline].filter(Boolean).join(' · ') || undefined}
+                    depTime={event.travel?.return_checkin_time}
+                    arrTime={event.travel?.return_arrival_time}
+                    checkinAirport={event.travel?.return_checkin_airport}
+                    arrivalAirport={event.travel?.return_arrival_airport}
+                    ticketUrl={event.travel?.return_ticket_pdf_url}
+                    color="#059669"
+                    fmtFn={fmtDT}
+                  />
+                  {retStops.map((stop, idx) => (
+                    <ConnLegCard
+                      key={idx}
+                      legNum={idx + 2}
+                      fromCity={stop.airport || '?'}
+                      toCity={retStops[idx + 1]?.airport || returnDest}
+                      flight={[stop.flight_number, stop.airline].filter(Boolean).join(' · ') || undefined}
+                      depTime={stop.checkin_time}
+                      arrTime={stop.arrival_time}
+                      checkinAirport={stop.checkin_airport}
+                      arrivalAirport={stop.arrival_airport}
+                      ticketUrl={stop.ticket_url}
+                      color="#059669"
+                      fmtFn={fmtDT}
+                    />
+                  ))}
                 </View>
-              )}
-
-              {retStops.length > 0 && (
-                <>
-                  <TouchableOpacity
-                    style={styles.connToggle}
-                    onPress={() => setShowRetConn((v) => !v)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="git-branch-outline" size={12} color="#059669" />
-                    <Text style={[styles.connToggleText, { color: '#059669' }]}>
-                      {showRetConn ? 'Hide' : 'View'} {retStops.length === 1 ? '1 connecting flight' : `${retStops.length} connecting flights`}
-                    </Text>
-                    <Ionicons name={showRetConn ? 'chevron-up' : 'chevron-down'} size={14} color="#059669" />
-                  </TouchableOpacity>
-                  {showRetConn && (
-                    <View style={styles.connList}>
-                      {retStops.map((stop, idx) => (
-                        <StopRow key={idx} index={idx} stop={stop} fmt={fmtDT} eventTitle={event.title} />
-                      ))}
-                    </View>
-                  )}
-                </>
+              ) : (
+                (event.travel?.return_flight_number || event.travel?.return_airline || retDepTime || event.travel?.return_boarding_point || event.travel?.return_deboarding_point) ? (
+                  <View style={styles.detailsGrid}>
+                    {(event.travel?.return_flight_number || event.travel?.return_airline) && (
+                      <View style={styles.detailItem}>
+                        <Ionicons name="airplane-outline" size={12} color="#059669" />
+                        <View>
+                          <Text style={styles.detailLabel}>Return flight</Text>
+                          <Text style={[styles.detailValue, { color: '#059669' }]}>
+                            {[event.travel?.return_flight_number, event.travel?.return_airline].filter(Boolean).join(' · ')}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {retDepTime && (
+                      <View style={styles.detailItem}>
+                        <Ionicons name="time-outline" size={12} color="#059669" />
+                        <View>
+                          <Text style={styles.detailLabel}>Check-in</Text>
+                          <Text style={[styles.detailValue, { color: '#059669' }]}>{retDepTime}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {event.travel?.return_boarding_point && (
+                      <View style={styles.detailItem}>
+                        <Ionicons name="navigate-outline" size={12} color="#059669" />
+                        <View>
+                          <Text style={styles.detailLabel}>Boarding</Text>
+                          <Text style={[styles.detailValue, { color: '#059669' }]} numberOfLines={1}>{event.travel.return_boarding_point}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {event.travel?.return_deboarding_point && (
+                      <View style={styles.detailItem}>
+                        <Ionicons name="flag-outline" size={12} color="#059669" />
+                        <View>
+                          <Text style={styles.detailLabel}>Deboarding</Text>
+                          <Text style={[styles.detailValue, { color: '#059669' }]} numberOfLines={1}>{event.travel.return_deboarding_point}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ) : null
               )}
             </>
           )}
@@ -786,55 +942,57 @@ function TripCard({ event, onPress }: { event: Event; onPress: () => void }) {
 
       {/* ── Bottom action bar ── */}
       <View style={styles.actionBar}>
-        <View style={styles.ticketGroup}>
-          {event.travel?.flight_ticket_url ? (
-            <View style={styles.ticketBtnRow}>
-              <TouchableOpacity
-                style={styles.ticketBtn}
-                onPress={() => Linking.openURL(event.travel!.flight_ticket_url!)}
-                activeOpacity={0.82}
-              >
-                <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ticketBtnGrad}>
-                  <Ionicons name="document-text-outline" size={14} color="#fff" />
-                  <Text style={styles.ticketBtnText}>View Ticket</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.cardWaBtn}
-                onPress={() => shareViaWhatsApp(ticketMessage('Outbound flight ticket', event.travel!.flight_ticket_url!, event.title))}
-                activeOpacity={0.82}
-              >
-                <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.noTicket}>
-              <Ionicons name="document-outline" size={13} color={colors.textTertiary} />
-              <Text style={styles.noTicketText}>No ticket uploaded</Text>
-            </View>
-          )}
-          {hasReturn && event.travel?.return_ticket_pdf_url && (
-            <View style={styles.ticketBtnRow}>
-              <TouchableOpacity
-                style={styles.ticketBtn}
-                onPress={() => Linking.openURL(event.travel!.return_ticket_pdf_url!)}
-                activeOpacity={0.82}
-              >
-                <LinearGradient colors={['#059669', '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ticketBtnGrad}>
-                  <Ionicons name="document-text-outline" size={14} color="#fff" />
-                  <Text style={styles.ticketBtnText}>Return Ticket</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.cardWaBtn, { backgroundColor: '#059669' }]}
-                onPress={() => shareViaWhatsApp(ticketMessage('Return flight ticket', event.travel!.return_ticket_pdf_url!, event.title))}
-                activeOpacity={0.82}
-              >
-                <Ionicons name="logo-whatsapp" size={16} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+        {outStops.length === 0 && (
+          <View style={styles.ticketGroup}>
+            {event.travel?.flight_ticket_url ? (
+              <View style={styles.ticketBtnRow}>
+                <TouchableOpacity
+                  style={styles.ticketBtn}
+                  onPress={() => Linking.openURL(event.travel!.flight_ticket_url!)}
+                  activeOpacity={0.82}
+                >
+                  <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ticketBtnGrad}>
+                    <Ionicons name="document-text-outline" size={14} color="#fff" />
+                    <Text style={styles.ticketBtnText}>View Ticket</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.cardWaBtn}
+                  onPress={() => shareViaWhatsApp(ticketMessage('Outbound flight ticket', event.travel!.flight_ticket_url!, event.title))}
+                  activeOpacity={0.82}
+                >
+                  <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.noTicket}>
+                <Ionicons name="document-outline" size={13} color={colors.textTertiary} />
+                <Text style={styles.noTicketText}>No ticket uploaded</Text>
+              </View>
+            )}
+            {hasReturn && event.travel?.return_ticket_pdf_url && (
+              <View style={styles.ticketBtnRow}>
+                <TouchableOpacity
+                  style={styles.ticketBtn}
+                  onPress={() => Linking.openURL(event.travel!.return_ticket_pdf_url!)}
+                  activeOpacity={0.82}
+                >
+                  <LinearGradient colors={['#059669', '#16A34A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ticketBtnGrad}>
+                    <Ionicons name="document-text-outline" size={14} color="#fff" />
+                    <Text style={styles.ticketBtnText}>Return Ticket</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.cardWaBtn, { backgroundColor: '#059669' }]}
+                  onPress={() => shareViaWhatsApp(ticketMessage('Return flight ticket', event.travel!.return_ticket_pdf_url!, event.title))}
+                  activeOpacity={0.82}
+                >
+                  <Ionicons name="logo-whatsapp" size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
         <TouchableOpacity style={styles.detailBtn} onPress={onPress} activeOpacity={0.82}>
           <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.detailBtnGrad}>
             <Text style={styles.detailBtnText}>View details</Text>
@@ -934,6 +1092,8 @@ const styles = StyleSheet.create({
   bannerCity: { fontSize: 30, fontWeight: '900', color: '#fff', letterSpacing: -0.5 },
   destCountry: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   bannerEventTitle: { fontSize: 15, color: 'rgba(255,255,255,0.75)', marginTop: 4, fontWeight: '600' },
+  bannerRouteRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 6 },
+  bannerRouteCity: { fontSize: 15, fontWeight: '700', color: 'rgba(255,255,255,255)' },
   bannerBottom: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -979,6 +1139,25 @@ const styles = StyleSheet.create({
   connToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 6, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   connToggleText: { fontSize: 12, fontWeight: '700', color: '#D97706' },
   connList: { marginTop: 8, gap: 6 },
+
+  // Connecting leg cards
+  legList: { gap: 10 },
+  legCard: { borderRadius: 14, borderWidth: 1.5, backgroundColor: '#FAFCFF', overflow: 'hidden' },
+  legHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  legNumBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+  legNumText: { fontSize: 9, fontWeight: '900', color: '#fff', letterSpacing: 0.6 },
+  legFlightLabel: { fontSize: 12, fontWeight: '700', flex: 1 },
+  legRouteRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
+  legCityCol: { flex: 1, gap: 3 },
+  legCityName: { fontSize: 17, fontWeight: '900', color: '#1E293B', letterSpacing: -0.3 },
+  legAirportCode: { fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
+  legTimeText: { fontSize: 11, fontWeight: '600', color: '#64748B', lineHeight: 16, marginTop: 2 },
+  legMid: { flexDirection: 'row', alignItems: 'center', gap: 3, flex: 0.9 },
+  legDot: { width: 6, height: 6, borderRadius: 3 },
+  legDash: { flex: 1, height: 1.5, borderRadius: 1 },
+  legPlaneCircle: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  legTicketBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 11, borderTopWidth: 1 },
+  legTicketText: { fontSize: 12, fontWeight: '700', flex: 1 },
 
   // 2-column detail grid
   detailsGrid: {
@@ -1059,6 +1238,20 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
   emptyText: { fontSize: 14, color: colors.textSecondary },
+
+  connectingBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: 'rgba(254,243,199,0.9)', borderRadius: 8,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderWidth: 1, borderColor: 'rgba(217,119,6,0.3)',
+  },
+  connectingBadgeText: { fontSize: 10, fontWeight: '700', color: '#D97706' },
+  travelOnlyBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#DB2777', borderRadius: 8,
+    paddingHorizontal: 7, paddingVertical: 3,
+  },
+  travelOnlyBadgeText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.4 },
 });
 
 // ── Modal styles ──────────────────────────────────────────────────────────────
@@ -1090,9 +1283,10 @@ const mStyles = StyleSheet.create({
 
   // Content
   scrollContent: { padding: 16, gap: 8, paddingBottom: 40 },
+  sectionHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 2 },
   sectionHead: {
     fontSize: 11, fontWeight: '800', color: colors.textTertiary,
-    textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 8, marginBottom: 2,
+    textTransform: 'uppercase', letterSpacing: 0.8,
   },
   card: {
     backgroundColor: '#fff',
@@ -1122,37 +1316,23 @@ const mStyles = StyleSheet.create({
   detailRowLabel: { fontSize: 10, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5 },
   detailRowValue: { fontSize: 15, fontWeight: '800', color: colors.textPrimary, marginTop: 2 },
 
-  // Stop rows
-  stopRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  // Leg section header
+  legHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingTop: 14, paddingBottom: 4,
   },
-  stopBorder: {
-    width: 3,
-    borderRadius: 2,
-    backgroundColor: '#FDE68A',
-    alignSelf: 'stretch',
-    marginLeft: 6,
+  legBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999,
   },
-  stopHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stopDot: {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: '#D97706',
-  },
-  stopLabel: { fontSize: 13, fontWeight: '800', color: '#92400E' },
-  stopDetail: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginLeft: 14 },
-  stopDetailMuted: { fontSize: 11, fontWeight: '500', color: colors.textTertiary },
-  stopTicketRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 14, marginTop: 6 },
-  stopTicketBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  stopTicketText: { fontSize: 12, fontWeight: '700', color: colors.primary },
-  waBtnSm: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#25D366', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
-  waTextSm: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  legBadgeText: { fontSize: 9, fontWeight: '900', color: '#fff', letterSpacing: 0.6 },
+  legRoute: { fontSize: 13, fontWeight: '700', color: colors.textPrimary, flex: 1 },
 
   // Ticket button
-  ticketActionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  ticketActionRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingTop: 12, paddingBottom: 6,
+  },
   waBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#25D366', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
   waText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   ticketBtn: {},
