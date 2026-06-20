@@ -61,6 +61,9 @@ function MainNavigator() {
   const { user } = useAuth();
   const isAssistant = user?.role === 'assistant';
   const { bottom: bottomInset } = useSafeAreaInsets();
+  // Floor the bottom padding so labels never clip behind the system
+  // nav/gesture bar in production builds, where the inset can resolve to 0.
+  const tabBottomPad = Math.max(bottomInset, 10);
 
   return (
     <MainTab.Navigator
@@ -96,15 +99,19 @@ function MainNavigator() {
         tabBarStyle: {
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: 56 + bottomInset,
-          paddingBottom: bottomInset + 4,
-          paddingTop: 6,
+          height: 60 + tabBottomPad,
+          paddingBottom: tabBottomPad,
+          paddingTop: 8,
           backgroundColor: '#fff',
         },
         tabBarSafeAreaInsets: { bottom: 0 },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
+          marginBottom: 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 1,
         },
       })}
     >
