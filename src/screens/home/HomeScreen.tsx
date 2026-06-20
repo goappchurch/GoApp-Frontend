@@ -12,7 +12,7 @@ import {
   Pressable,
   Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -66,6 +66,7 @@ function dateBlock(iso: string) {
 export default function HomeScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const isAssistant = user?.role === 'assistant';
   const isBoss = user?.role === 'boss';
 
@@ -131,7 +132,7 @@ export default function HomeScreen() {
   const firstName = user?.full_name?.split(' ')[0] ?? 'there';
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['left', 'right']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -149,7 +150,7 @@ export default function HomeScreen() {
           locations={[0, 0.4, 0.8, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
-          style={styles.hero}
+          style={[styles.hero, { paddingTop: insets.top + 14 }]}
         >
           {/* App bar */}
           <View style={styles.appBar}>

@@ -45,7 +45,7 @@ export default function SettingsScreen() {
     name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.title}>Settings</Text>
       </View>

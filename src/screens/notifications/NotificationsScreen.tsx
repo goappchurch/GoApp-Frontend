@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../contexts/AuthContext';
@@ -24,6 +25,7 @@ export default function NotificationsScreen() {
   const { user } = useAuth();
   const { notifications, setNotifications, markRead, markAllRead } = useNotificationStore();
   const [loading, setLoading] = useState(true);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (!user) return;
@@ -60,7 +62,7 @@ export default function NotificationsScreen() {
       <FlatList
         data={notifications}
         keyExtractor={(n) => n.id}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: 12 + insets.bottom }]}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="notifications-off-outline" size={48} color={colors.inactive} />

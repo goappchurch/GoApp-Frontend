@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,6 +42,7 @@ export default function EventDetailScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
   const isAssistant = user?.role === 'assistant';
+  const insets = useSafeAreaInsets();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
@@ -430,7 +432,7 @@ export default function EventDetailScreen() {
         </View>
       </View>
 
-      <ScrollView ref={formScrollRef} style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} onScroll={handleDetailScroll} scrollEventThrottle={24}>
+      <ScrollView ref={formScrollRef} style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]} showsVerticalScrollIndicator={false} onScroll={handleDetailScroll} scrollEventThrottle={24}>
 
         {/* ── Hero poster ── */}
         <TouchableOpacity

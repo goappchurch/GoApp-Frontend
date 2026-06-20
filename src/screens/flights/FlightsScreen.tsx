@@ -119,7 +119,7 @@ export default function FlightsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primaryDarker} />
 
       {/* Gradient header */}

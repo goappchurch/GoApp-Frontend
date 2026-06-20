@@ -440,7 +440,7 @@ export default function CalendarScreen() {
       end={{ x: 1, y: 1 }}
       style={{ flex: 1 }}
     >
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         {/* Ambient orb decorations */}
         <View style={styles.orb1} pointerEvents="none" />
         <View style={styles.orb2} pointerEvents="none" />

@@ -96,8 +96,8 @@ function MainNavigator() {
         tabBarStyle: {
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: 64 + bottomInset,
-          paddingBottom: 10 + bottomInset,
+          height: 56 + bottomInset,
+          paddingBottom: bottomInset + 4,
           paddingTop: 6,
           backgroundColor: '#fff',
         },
