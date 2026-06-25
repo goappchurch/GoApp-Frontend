@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors, shadow, radius, eventTypeIcons, gradients } from '../../constants/theme';
+import { colors, shadow, radius, eventTypeIcons, gradients, REGION_VALUES } from '../../constants/theme';
 import { getLoadingVerse } from '../../constants/verses';
 import { getEvents, confirmEvent } from '../../services/events';
 import { Event } from '../../types';
@@ -112,10 +112,12 @@ export default function EventsListScreen() {
     return d;
   }, []);
 
-  const allRegions = useMemo(() =>
-    [...new Set(events.map(e => e.venue?.region).filter(Boolean) as string[])].sort(),
-    [events]
-  );
+  const allRegions = useMemo(() => {
+    // Always show the canonical regions, plus any legacy region found on events.
+    const fromEvents = events.map(e => e.venue?.region).filter(Boolean) as string[];
+    const extras = [...new Set(fromEvents)].filter(r => !REGION_VALUES.includes(r)).sort();
+    return [...REGION_VALUES, ...extras];
+  }, [events]);
 
   const filtered = useMemo(() => {
     return events.filter(e => {

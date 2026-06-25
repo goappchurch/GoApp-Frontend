@@ -53,6 +53,21 @@ export async function getUpcomingEvents(limit = 5): Promise<Event[]> {
   return (data || []).map(normalizeEvent);
 }
 
+// Count of today-or-future events only (no rows transferred — count header only).
+export async function getUpcomingEventsCount(): Promise<number> {
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  const iso = cutoff.toISOString();
+
+  const { count, error } = await supabase
+    .from('events')
+    .select('*', { count: 'exact', head: true })
+    .or(`date_start.gte.${iso},date_end.gte.${iso}`);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function getEventById(id: string): Promise<Event> {
   const { data, error } = await supabase
     .from('events')

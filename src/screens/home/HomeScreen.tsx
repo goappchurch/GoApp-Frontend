@@ -19,7 +19,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { RootStackParamList } from '../../navigation/AppNavigator';
-import { getUpcomingEvents, getNotifications } from '../../services/events';
+import { getUpcomingEvents, getUpcomingEventsCount, getNotifications } from '../../services/events';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useRealtimeEvents, useRealtimeNotifications } from '../../hooks/useRealtimeEvents';
 import { Event } from '../../types';
@@ -70,13 +70,17 @@ export default function HomeScreen() {
   const isBoss = user?.role === 'boss';
 
   const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
+  const [upcomingCount, setUpcomingCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { setNotifications, unreadCount } = useNotificationStore();
 
   const loadData = useCallback(async () => {
     try {
-      const upcoming = await getUpcomingEvents(10);
+      const [upcoming, count] = await Promise.all([
+        getUpcomingEvents(10),
+        getUpcomingEventsCount(),
+      ]);
       // Only keep events that are today or in the future — drop anything past
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
@@ -85,6 +89,7 @@ export default function HomeScreen() {
         return end >= startOfToday;
       });
       setUpcomingEvents(current);
+      setUpcomingCount(count);
       if (user) {
         const notifs = await getNotifications(user.id);
         setNotifications(notifs);
@@ -184,7 +189,7 @@ export default function HomeScreen() {
               activeOpacity={0.7}
               onPress={() => navigation.navigate('Main', { screen: 'Events' })}
             >
-              <Text style={styles.statNumber}>{upcomingEvents.length}</Text>
+              <Text style={styles.statNumber}>{upcomingCount}</Text>
               <Text style={styles.statLabel}>Upcoming</Text>
             </TouchableOpacity>
             <View style={styles.statDivider} />

@@ -100,3 +100,18 @@ export const shadow = {
     elevation: 8,
   },
 };
+
+// Canonical list of event regions — shared by the region picker (Add/Edit) and
+// the region filter chips (Events / Home) so the same options appear everywhere.
+export const REGION_OPTIONS = [
+  { value: 'Kerala',       label: 'Kerala',       sub: "God's Own Country",                            icon: 'business-outline'  as const, color: '#7C3AED' },
+  { value: 'Kochi',        label: 'Kochi',        sub: 'Ernakulam & Greater Kochi',                    icon: 'boat-outline'      as const, color: '#0D9488' },
+  { value: 'South India',  label: 'South India',  sub: 'Tamil Nadu, Karnataka, Andhra Pradesh & more', icon: 'leaf-outline'      as const, color: '#16A34A' },
+  { value: 'North India',  label: 'North India',  sub: 'Delhi, Rajasthan, Uttar Pradesh & more',       icon: 'compass-outline'   as const, color: '#2563EB' },
+  { value: 'Middle East',  label: 'Middle East',  sub: 'Gulf Countries & beyond',                      icon: 'sunny-outline'     as const, color: '#D97706' },
+  { value: 'Dubai',        label: 'Dubai',        sub: 'UAE · Gulf',                                   icon: 'sparkles-outline'  as const, color: '#B45309' },
+  { value: 'Europe',       label: 'Europe',       sub: 'Western, Central & Eastern Europe',            icon: 'flag-outline'      as const, color: '#0891B2' },
+  { value: 'Others',       label: 'Others',       sub: 'Other countries & regions',                    icon: 'earth-outline'     as const, color: '#64748B' },
+];
+
+export const REGION_VALUES = REGION_OPTIONS.map(r => r.value);

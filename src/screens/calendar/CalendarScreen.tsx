@@ -18,7 +18,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useAuth } from '../../contexts/AuthContext';
-import { getEventsByMonth, getUpcomingEvents } from '../../services/events';
+import { getEventsByMonth } from '../../services/events';
 import { FlightDetailModal } from '../flights/FlightsScreen';
 import { Event } from '../../types';
 import { eventTypeIcons, colors } from '../../constants/theme';
@@ -27,7 +27,7 @@ import { getLoadingVerse } from '../../constants/verses';
 const { width: SCREEN_W } = Dimensions.get('window');
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type ViewMode = 'month' | 'week' | 'agenda';
+type ViewMode = 'month' | 'week';
 
 type SpanInfo = {
   event: Event;
@@ -99,25 +99,6 @@ function buildCalendarGrid(year: number, month: number): (number | null)[][] {
   return rows;
 }
 
-function buildAgendaGroups(events: Event[]) {
-  const monthMap = new Map<string, Map<string, Event[]>>();
-  for (const e of events) {
-    const d = new Date(e.date_start);
-    const mk = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const dk = toDateStr(new Date(e.date_start));
-    if (!monthMap.has(mk)) monthMap.set(mk, new Map());
-    const dm = monthMap.get(mk)!;
-    if (!dm.has(dk)) dm.set(dk, []);
-    dm.get(dk)!.push(e);
-  }
-  return Array.from(monthMap.entries()).map(([month, dm]) => ({
-    month,
-    dates: Array.from(dm.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([dk, evts]) => ({ dk, evts })),
-  }));
-}
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 
@@ -143,26 +124,34 @@ export default function CalendarScreen() {
   const [pageLoading, setPageLoading] = useState(true);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
-  const [agendaEvents, setAgendaEvents] = useState<Event[]>([]);
   const [popupDate, setPopupDate] = useState<string | null>(null);
   const [popupEvents, setPopupEvents] = useState<Event[]>([]);
   const [popupFlights, setPopupFlights] = useState<FlightInfo[]>([]);
   const [flightDetailEvent, setFlightDetailEvent] = useState<Event | null>(null);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
   // Per-month event cache — keyed by "YYYY-M". Populated on first fetch,
   // served instantly on revisit so green backgrounds appear with zero lag.
   const eventsCache = useRef<Record<string, Event[]>>({});
+  // Key of the month currently being displayed. Any fetch (cached refresh or
+  // first load) that resolves for a different month is ignored — prevents a
+  // previous month's in-flight request from clobbering the grid (the flicker).
+  const activeMonthKey = useRef<string>(`${currentMonth.year}-${currentMonth.month}`);
 
   const loadMonth = useCallback(async (year: number, month: number, isPage = false) => {
     const key = `${year}-${month}`;
+    activeMonthKey.current = key;
     const cached = eventsCache.current[key];
     if (cached) {
       // Serve cache immediately — no spinner, no lag
       setEvents(cached);
       setPageLoading(false);
-      // Silently refresh in the background
+      // Silently refresh in the background, but only apply if still on this month
       getEventsByMonth(year, month)
-        .then(fresh => { eventsCache.current[key] = fresh; setEvents(fresh); })
+        .then(fresh => {
+          eventsCache.current[key] = fresh;
+          if (activeMonthKey.current === key) setEvents(fresh);
+        })
         .catch(() => {});
       return;
     }
@@ -171,18 +160,7 @@ export default function CalendarScreen() {
     try {
       const data = await getEventsByMonth(year, month);
       eventsCache.current[key] = data;
-      setEvents(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      isPage ? setPageLoading(false) : setEventsLoading(false);
-    }
-  }, []);
-
-  const loadAgenda = useCallback(async (isPage = false) => {
-    isPage ? setPageLoading(true) : setEventsLoading(true);
-    try {
-      setAgendaEvents(await getUpcomingEvents(90));
+      if (activeMonthKey.current === key) setEvents(data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -197,15 +175,9 @@ export default function CalendarScreen() {
   const firstFocus = useRef(true);
   useFocusEffect(useCallback(() => {
     const { year, month } = currentMonthRef.current;
-    if (firstFocus.current) {
-      firstFocus.current = false;
-      if (viewMode === 'agenda') loadAgenda(true);
-      else loadMonth(year, month, true);
-    } else {
-      if (viewMode === 'agenda') loadAgenda();
-      else loadMonth(year, month);
-    }
-  }, [viewMode]));
+    loadMonth(year, month, firstFocus.current);
+    firstFocus.current = false;
+  }, [loadMonth]));
 
   const handleMonthStep = useCallback((dir: 1 | -1) => {
     const d = new Date(currentMonth.year, currentMonth.month - 1 + dir, 1);
@@ -214,11 +186,18 @@ export default function CalendarScreen() {
     loadMonth(y, m);
   }, [currentMonth, loadMonth]);
 
+  const goToMonth = useCallback((y: number, m: number) => {
+    setCurrentMonth({ year: y, month: m });
+    // Keep the week view / day panel in sync by selecting the 1st of the month
+    setSelectedDate(toDateStr(new Date(y, m - 1, 1)));
+    loadMonth(y, m);
+    setMonthPickerOpen(false);
+  }, [loadMonth]);
+
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setViewMode(mode);
-    if (mode === 'agenda') loadAgenda();
-    else loadMonth(currentMonth.year, currentMonth.month);
-  }, [currentMonth, loadMonth, loadAgenda]);
+    loadMonth(currentMonth.year, currentMonth.month);
+  }, [currentMonth, loadMonth]);
 
   const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
 
@@ -300,7 +279,6 @@ export default function CalendarScreen() {
     [events, selectedDate],
   );
 
-  const agendaGroups = useMemo(() => buildAgendaGroups(agendaEvents), [agendaEvents]);
 
 
   const weekEventMap = useMemo(() => {
@@ -449,40 +427,17 @@ export default function CalendarScreen() {
         {/* ── HEADER ──────────────────────────────────────────────────────── */}
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
-            {viewMode === 'agenda' ? (
-              <Text style={styles.headerTitle}>Agenda</Text>
-            ) : (
-              <>
-                <Text style={styles.headerTitle}>
-                  {formatMonthName(today.getFullYear(), today.getMonth() + 1)}{' '}
-                  {today.getDate()}
-                </Text>
-                <Text style={styles.headerYear}>{today.getFullYear()}</Text>
-              </>
-            )}
+            <Text style={styles.headerTitle}>
+              {formatMonthName(today.getFullYear(), today.getMonth() + 1)}{' '}
+              {today.getDate()}
+            </Text>
+            <Text style={styles.headerYear}>{today.getFullYear()}</Text>
             <Text style={styles.headerSub}>
               {eventsLoading
                 ? '✦'
-                : viewMode === 'agenda'
-                  ? `${agendaEvents.length} upcoming event${agendaEvents.length !== 1 ? 's' : ''}`
-                  : `${events.length} event${events.length !== 1 ? 's' : ''} this month`}
+                : `${events.length} event${events.length !== 1 ? 's' : ''} this month`}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.todayBtn}
-            onPress={() => {
-              setSelectedDate(todayStr);
-              const y = today.getFullYear(), m = today.getMonth() + 1;
-              if (y !== currentMonth.year || m !== currentMonth.month) {
-                setCurrentMonth({ year: y, month: m });
-                loadMonth(y, m);
-              }
-            }}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="today-outline" size={14} color="#fff" />
-            <Text style={styles.todayBtnText}>Today</Text>
-          </TouchableOpacity>
         </View>
 
         {/* ── SEGMENTED CONTROL ───────────────────────────────────────────── */}
@@ -491,7 +446,6 @@ export default function CalendarScreen() {
             {([
               { key: 'month', icon: 'calendar-outline', label: 'Month' },
               { key: 'week', icon: 'grid-outline', label: 'Week' },
-              { key: 'agenda', icon: 'list-outline', label: 'Agenda' },
             ] as { key: ViewMode; icon: any; label: string }[]).map((tab) => (
               <TouchableOpacity
                 key={tab.key}
@@ -542,9 +496,16 @@ export default function CalendarScreen() {
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => handleMonthStep(-1)} activeOpacity={0.7}>
                     <Ionicons name="chevron-back" size={19} color="#4338CA" />
                   </TouchableOpacity>
-                  <Text style={[styles.calNavTitle, { color: '#090909', fontSize: 20, fontWeight: '700' }]}>
-                    {formatMonthYear(currentMonth.year, currentMonth.month)}
-                  </Text>
+                  <TouchableOpacity
+                    style={styles.calNavTitleBtn}
+                    onPress={() => setMonthPickerOpen(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.calNavTitle, { color: '#090909', fontSize: 20, fontWeight: '700' }]}>
+                      {formatMonthYear(currentMonth.year, currentMonth.month)}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color="#4338CA" />
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.calNavBtn} onPress={() => handleMonthStep(1)} activeOpacity={0.7}>
                     <Ionicons name="chevron-forward" size={19} color="#4338CA" />
                   </TouchableOpacity>
@@ -714,6 +675,14 @@ export default function CalendarScreen() {
                     </View>
                   );
                 })}
+
+                {/* Loader overlay while an uncached month is fetching, so the
+                    grid never appears blank-then-populated */}
+                {eventsLoading && (
+                  <View style={styles.calLoaderOverlay} pointerEvents="none">
+                    <ActivityIndicator size="large" color={colors.primary} />
+                  </View>
+                )}
               </LinearGradient>
 
               {/* Legend */}
@@ -879,73 +848,6 @@ export default function CalendarScreen() {
             </>
           )}
 
-          {/* ════ AGENDA VIEW ════ */}
-          {viewMode === 'agenda' && (
-            <View style={styles.agendaWrap}>
-              {eventsLoading ? (
-                <View style={styles.eventsLoader}>
-                  <ActivityIndicator color="#A5B4FC" />
-                </View>
-              ) : agendaGroups.length === 0 ? (
-                <EmptyState title="Nothing scheduled" subtitle="No upcoming events in the next 90 days" />
-              ) : (
-                agendaGroups.map((group) => (
-                  <View key={group.month} style={styles.agendaMonth}>
-                    <View style={styles.agendaMonthHeader}>
-                      <Text style={styles.agendaMonthText}>{group.month.toUpperCase()}</Text>
-                      <View style={styles.agendaMonthLine} />
-                      <View style={styles.agendaMonthBadge}>
-                        <Text style={styles.agendaMonthBadgeText}>
-                          {group.dates.reduce((acc, d) => acc + d.evts.length, 0)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {group.dates.map(({ dk, evts }) => {
-                      const d = new Date(dk + 'T00:00:00');
-                      const isToday = dk === todayStr;
-                      return (
-                        <View key={dk} style={styles.agendaDateRow}>
-                          {isToday ? (
-                            <LinearGradient
-                              colors={[colors.primary, colors.accent]}
-                              style={styles.agendaDateBubble}
-                            >
-                              <Text style={[styles.agendaDateDay, { color: '#fff' }]}>
-                                {String(d.getDate()).padStart(2, '0')}
-                              </Text>
-                              <Text style={[styles.agendaDateMon, { color: 'rgba(255,255,255,0.7)' }]}>
-                                {d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
-                              </Text>
-                            </LinearGradient>
-                          ) : (
-                            <View style={styles.agendaDateBubble}>
-                              <Text style={styles.agendaDateDay}>
-                                {String(d.getDate()).padStart(2, '0')}
-                              </Text>
-                              <Text style={styles.agendaDateMon}>
-                                {d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}
-                              </Text>
-                            </View>
-                          )}
-                          <View style={styles.agendaEventsCol}>
-                            {evts.map((ev) => (
-                              <PremiumEventCard
-                                key={ev.id}
-                                event={ev}
-                                onPress={() => navigation.navigate('EventDetail', { eventId: ev.id })}
-                              />
-                            ))}
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                ))
-              )}
-            </View>
-          )}
-
         </ScrollView>
 
         {isAssistant && (
@@ -994,10 +896,135 @@ export default function CalendarScreen() {
             if (ds) navigation.navigate('AddEditEvent', { defaultDate: ds });
           }}
         />
+        <MonthYearPicker
+          visible={monthPickerOpen}
+          year={currentMonth.year}
+          month={currentMonth.month}
+          onClose={() => setMonthPickerOpen(false)}
+          onSelect={goToMonth}
+        />
       </SafeAreaView>
     </LinearGradient>
   );
 }
+
+// ─── Month / Year picker ────────────────────────────────────────────────────────
+
+const PICKER_YEARS = Array.from({ length: 2050 - 2020 + 1 }, (_, i) => 2020 + i);
+const PICKER_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+
+function MonthYearPicker({
+  visible, year, month, onClose, onSelect,
+}: {
+  visible: boolean;
+  year: number;
+  month: number;
+  onClose: () => void;
+  onSelect: (year: number, month: number) => void;
+}) {
+  const [selYear, setSelYear] = useState(year);
+  const [selMonth, setSelMonth] = useState(month);
+  const yearScrollRef = useRef<ScrollView>(null);
+
+  // Re-sync to the live month whenever the picker is opened
+  useEffect(() => {
+    if (visible) {
+      setSelYear(year);
+      setSelMonth(month);
+      // scroll the year list so the current year is near the top
+      const idx = PICKER_YEARS.indexOf(year);
+      setTimeout(() => yearScrollRef.current?.scrollTo({ y: Math.max(0, (idx - 2) * 44), animated: false }), 0);
+    }
+  }, [visible, year, month]);
+
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <TouchableOpacity style={pk.backdrop} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity style={pk.sheet} activeOpacity={1} onPress={() => {}}>
+          <View style={pk.handle} />
+          <Text style={pk.title}>Jump to month</Text>
+
+          <View style={pk.cols}>
+            {/* Month column */}
+            <View style={pk.col}>
+              <Text style={pk.colLabel}>MONTH</Text>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={pk.colScroll}>
+                {PICKER_MONTHS.map((m) => {
+                  const active = m === selMonth;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[pk.row, active && pk.rowActive]}
+                      onPress={() => setSelMonth(m)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[pk.rowText, active && pk.rowTextActive]}>
+                        {formatMonthName(2000, m)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Year column */}
+            <View style={pk.col}>
+              <Text style={pk.colLabel}>YEAR</Text>
+              <ScrollView ref={yearScrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={pk.colScroll}>
+                {PICKER_YEARS.map((y) => {
+                  const active = y === selYear;
+                  return (
+                    <TouchableOpacity
+                      key={y}
+                      style={[pk.row, active && pk.rowActive]}
+                      onPress={() => setSelYear(y)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[pk.rowText, active && pk.rowTextActive]}>{y}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+
+          <TouchableOpacity style={pk.goBtn} onPress={() => onSelect(selYear, selMonth)} activeOpacity={0.85}>
+            <LinearGradient
+              colors={[colors.primary, colors.primaryDark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={pk.goBtnGrad}
+            >
+              <Text style={pk.goBtnText}>Go to {formatMonthYear(selYear, selMonth)}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+const pk = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.55)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 28,
+  },
+  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: '#E2E8F0', marginBottom: 14 },
+  title: { fontSize: 18, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 16 },
+  cols: { flexDirection: 'row', gap: 12, height: 280 },
+  col: { flex: 1 },
+  colLabel: { fontSize: 11, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.8, marginBottom: 8, marginLeft: 4 },
+  colScroll: { paddingBottom: 8 },
+  row: { height: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, marginBottom: 4 },
+  rowActive: { backgroundColor: colors.primaryLight ?? '#EEF2FF' },
+  rowText: { fontSize: 15, fontWeight: '600', color: '#334155' },
+  rowTextActive: { color: colors.primary, fontWeight: '800' },
+  goBtn: { marginTop: 18, borderRadius: 14, overflow: 'hidden' },
+  goBtnGrad: { paddingVertical: 15, alignItems: 'center' },
+  goBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+});
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -1133,21 +1160,6 @@ function PremiumEventCard({ event, onPress }: { event: Event; onPress: () => voi
       </View>
       <Ionicons name="chevron-forward" size={12} color="#9CA3AF" style={{ marginRight: 10 }} />
     </TouchableOpacity>
-  );
-}
-
-function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <View style={styles.emptyWrap}>
-      <LinearGradient
-        colors={['rgba(79,70,229,0.32)', 'rgba(99,102,241,0.18)']}
-        style={styles.emptyIconCircle}
-      >
-        <Ionicons name="calendar-outline" size={32} color="#A5B4FC" />
-      </LinearGradient>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptySubtitle}>{subtitle}</Text>
-    </View>
   );
 }
 
@@ -1607,6 +1619,15 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: 110 },
 
   // Calendar card
+  calLoaderOverlay: {
+    position: 'absolute',
+    left: 0, right: 0, top: 64, bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
   calCard: {
     marginHorizontal: 16,
     borderRadius: 28,
@@ -1637,6 +1658,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(67,56,202,0.15)',
+  },
+  calNavTitleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(67,56,202,0.06)',
   },
   calNavTitle: {
     fontSize: 15,

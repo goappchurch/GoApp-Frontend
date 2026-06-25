@@ -31,20 +31,12 @@ import {
 import { getContacts } from '../../services/contacts';
 import { supabase } from '../../lib/supabase';
 import { EventFormData, Contact, ConnectionStop } from '../../types';
-import { colors, shadow, radius } from '../../constants/theme';
+import { colors, shadow, radius, REGION_OPTIONS } from '../../constants/theme';
 import { getLoadingVerse } from '../../constants/verses';
 
 type RouteProps = RouteProp<RootStackParamList, 'AddEditEvent'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const REGION_OPTIONS = [
-  { value: 'Kerala',       label: 'Kerala',       sub: "God's Own Country",                          icon: 'business-outline'  as const, color: '#7C3AED' },
-  { value: 'South India',  label: 'South India',  sub: 'Tamil Nadu, Karnataka, Andhra Pradesh & more', icon: 'leaf-outline'      as const, color: '#16A34A' },
-  { value: 'North India',  label: 'North India',  sub: 'Delhi, Rajasthan, Uttar Pradesh & more',      icon: 'compass-outline'   as const, color: '#2563EB' },
-  { value: 'Middle East',  label: 'Middle East',  sub: 'Gulf Countries & beyond',                     icon: 'sunny-outline'     as const, color: '#D97706' },
-  { value: 'Europe',       label: 'Europe',       sub: 'Western, Central & Eastern Europe',           icon: 'flag-outline'      as const, color: '#0891B2' },
-  { value: 'Others',       label: 'Others',       sub: 'Other countries & regions',                   icon: 'earth-outline'     as const, color: '#64748B' },
-];
 const TIMEZONE_OPTIONS = [
   { value: 'Asia/Kolkata',         label: 'India (IST)',          sub: 'UTC+5:30 · Asia/Kolkata',         icon: 'flag-outline'          as const, color: '#FF6B35' },
   { value: 'UTC',                  label: 'UTC',                  sub: 'Universal Coordinated Time',      icon: 'globe-outline'          as const, color: '#64748B' },
